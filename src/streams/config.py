@@ -38,6 +38,9 @@ class Config:
     model_synthesis: str = "claude-opus-4-7"
     # Apple Notes account that holds the stream notes.
     notes_account: str = "iCloud"
+    # Hashtag that marks a note as a stream. Managed notes carry it; a user-created
+    # note with this tag is auto-captured into a new stream (see streams.sync.capture_tagged).
+    note_tag: str = "#stream"
     # The phone number / email used to match your inbound iMessage replies.
     imessage_handle: str = ""
     # Claude API key. If empty, the SDK falls back to the ANTHROPIC_API_KEY env var.

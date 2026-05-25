@@ -82,12 +82,12 @@ def load_snapshot(store: Store, slug: str) -> NoteDocument | None:
 # --- the round-trip ---------------------------------------------------------
 
 
-def sync_stream(store: Store, bridge: NotesBridge, slug: str) -> SyncResult:
+def sync_stream(store: Store, bridge: NotesBridge, slug: str, tag: str | None = None) -> SyncResult:
     stream = store.read_stream(slug)
 
     # First time: create the note from current state and snapshot it.
     if not stream.note_id:
-        doc = render(store, slug)
+        doc = render(store, slug, tag=tag)
         note_id = bridge.create_note(stream.title, doc)
         store.set_note_id(slug, note_id)
         save_snapshot(store, slug, doc)
@@ -95,15 +95,41 @@ def sync_stream(store: Store, bridge: NotesBridge, slug: str) -> SyncResult:
 
     current = bridge.read_note(stream.note_id)
     # base carries ids; fall back to a fresh render if the snapshot was lost.
-    base = load_snapshot(store, slug) or render(store, slug)
+    base = load_snapshot(store, slug) or render(store, slug, tag=tag)
     changes = reconcile(store, slug, base, current)
 
     # Re-render from the (now updated) store and write back, refreshing the
     # snapshot. Skip the write when nothing changed and we already had a
     # snapshot, to avoid churning the note's modification date.
     if changes or load_snapshot(store, slug) is None:
-        doc = render(store, slug)
+        doc = render(store, slug, tag=tag)
         bridge.write_note(stream.note_id, doc)
         save_snapshot(store, slug, doc)
 
     return SyncResult(slug, changes=changes)
+
+
+def capture_tagged(store: Store, bridge: NotesBridge, tag: str) -> list[str]:
+    """Adopt user-created notes carrying `tag` that we don't already track.
+
+    For each new tagged note: create a stream (title from the note), move the
+    note's free text into the stream's notes, claim its note_id, then render our
+    structured doc over it and snapshot. Returns the new stream slugs.
+    """
+    from .notes_bridge import strip_tag
+
+    known = {s.note_id for s in store.list_streams() if s.note_id}
+    created: list[str] = []
+    for ref in bridge.find_notes_with_tag(tag):
+        if ref.id in known:
+            continue  # already a managed stream note
+        stream = store.create_stream(ref.title.strip() or "Captured stream")
+        body = strip_tag(ref.text, tag)
+        if body.strip():
+            store.set_notes(stream.id, body)
+        store.set_note_id(stream.id, ref.id)
+        doc = render(store, stream.id, tag=tag)
+        bridge.write_note(ref.id, doc)
+        save_snapshot(store, stream.id, doc)
+        created.append(stream.id)
+    return created

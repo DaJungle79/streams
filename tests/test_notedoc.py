@@ -61,3 +61,14 @@ def test_parse_tolerates_missing_zone():
     doc = parse_text(text)
     assert doc.zone("goals") is None
     assert [l.text for l in doc.zone("todos").lines] == ["only todos here"]
+
+
+def test_tag_rendered_under_title_and_ignored_on_parse():
+    doc = sample_doc()
+    doc.tag = "#stream"
+    text = serialize_text(doc)
+    assert text.splitlines()[1] == "#stream"  # right under the title
+    # the tag is read-only metadata: it doesn't leak into any zone on parse
+    back = parse_text(text)
+    assert back.title == "Bali Trip"
+    assert all("#stream" not in l.text for z in back.zones for l in z.lines)

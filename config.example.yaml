@@ -23,6 +23,10 @@ model_synthesis: claude-opus-4-7
 # Apple Notes account that holds the stream notes.
 notes_account: iCloud
 
+# Hashtag marking a note as a stream. Managed notes carry it; create a note with
+# this tag and it gets auto-captured into a new stream on the next `capture`/sync.
+note_tag: "#stream"
+
 # The phone number / email used to match your inbound iMessage replies.
 imessage_handle: ""
 
