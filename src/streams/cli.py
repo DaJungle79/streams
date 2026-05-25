@@ -237,6 +237,43 @@ def cmd_agent_digest(store: Store, args) -> int:
     return 0
 
 
+def cmd_agent_oversee(store: Store, args) -> int:
+    from .agent.overseer import oversee
+
+    cfg = _load_config(args)
+    try:
+        result = oversee(store, _agent_llm(cfg), budget=cfg.token_budget)
+    except Exception as exc:  # noqa: BLE001
+        return _agent_error(exc)
+    print(result.summary)
+    if result.focus:
+        print("\nFocus:")
+        for f in result.focus:
+            print(f"  - {f}")
+    if result.usage:
+        print(f"\n[cost ${result.usage.cost_usd:.4f}]", file=sys.stderr)
+    return 0
+
+
+def cmd_agent_cycle(store: Store, args) -> int:
+    from .agent.overseer import run_cycle
+
+    cfg = _load_config(args)
+    try:
+        results, overseer = run_cycle(store, _agent_llm(cfg), budget=cfg.token_budget)
+    except Exception as exc:  # noqa: BLE001
+        return _agent_error(exc)
+    print(f"stream passes: {len(results)}")
+    for r in results:
+        print(f"  {r.slug}: {len(r.suggestions_added)} suggestion(s)")
+    print("\nOverseer summary:")
+    print(overseer.summary)
+    total = sum((r.usage.cost_usd for r in results if r.usage), 0.0)
+    total += overseer.usage.cost_usd if overseer.usage else 0.0
+    print(f"\n[total cost ${total:.4f}]", file=sys.stderr)
+    return 0
+
+
 def _agent_error(exc: Exception) -> int:
     msg = str(exc)
     if "api_key" in msg.lower() or "ANTHROPIC_API_KEY" in msg or "authentication" in msg.lower():
@@ -320,6 +357,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("slug", nargs="?"); p.add_argument("--all", action="store_true")
     p.set_defaults(fn=cmd_agent_pass)
     p = ap.add_parser("digest", parents=[common]); p.set_defaults(fn=cmd_agent_digest)
+    p = ap.add_parser("oversee", parents=[common]); p.set_defaults(fn=cmd_agent_oversee)
+    p = ap.add_parser("cycle", parents=[common]); p.set_defaults(fn=cmd_agent_cycle)
 
     # query
     qp = sub.add_parser("query").add_subparsers(dest="action", required=True)

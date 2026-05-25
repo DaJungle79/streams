@@ -310,6 +310,35 @@ class Store:
         self._agent_md(slug).write_text(body, encoding="utf-8")
         gitutil.commit(self.repo, f"update agent synthesis for {slug}", [self._agent_md(slug)])
 
+    # --- overseer (high-level cross-stream status + durable memory) ----------
+    # Not a stream: lives in overseer/ at the repo root. The overseer reads its
+    # own prior status + memory each run for continuity (see streams.agent.overseer).
+
+    def _overseer_file(self, name: str) -> Path:
+        return self.repo / "overseer" / name
+
+    def _read_overseer(self, name: str) -> str:
+        f = self._overseer_file(name)
+        return f.read_text(encoding="utf-8") if f.exists() else ""
+
+    def _write_overseer(self, name: str, text: str, message: str) -> None:
+        f = self._overseer_file(name)
+        f.parent.mkdir(exist_ok=True)
+        f.write_text((text.rstrip() + "\n") if text.strip() else "", encoding="utf-8")
+        gitutil.commit(self.repo, message, [f])
+
+    def read_overseer_status(self) -> str:
+        return self._read_overseer("status.md")
+
+    def write_overseer_status(self, text: str) -> None:
+        self._write_overseer("status.md", text, "update overseer status")
+
+    def read_overseer_memory(self) -> str:
+        return self._read_overseer("memory.md")
+
+    def write_overseer_memory(self, text: str) -> None:
+        self._write_overseer("memory.md", text, "update overseer memory")
+
 
 def _find(items, item_id):
     for item in items:

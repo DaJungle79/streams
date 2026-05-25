@@ -21,7 +21,8 @@ A single **always-on daemon**; markdown-in-git is the source of truth; **Apple N
 - **The note round-trip is the make-or-break component.** A note is both rendered output and editable input, with **delimited zones**: user-owned (goals, todo checklist, free *Notes/Thoughts*), agent-owned (current state, what's next, suggestions), read-only (recent events). Reconcile rule: **user edits always win and reconcile first; the agent only rewrites its own zones.** Structured edits (checkbox/add/remove/goal) are handled deterministically via the `.render/<slug>.json` manifest; the free-form region uses the LLM.
 - **No change-events from Apple** — the daemon **polls** Notes (mod-date/hash), Reminders (completion), and iMessage (`chat.db`).
 - **Apple bridges, all-Python where possible:** pyobjc/EventKit for Reminders; AppleScript/JXA for Notes; `chat.db` SQLite read + AppleScript send for iMessage. Put bridges behind interfaces so core/agent test with fakes (no Mac in CI). Needs macOS Automation, Reminders, and **Full Disk Access** (chat.db) permissions.
-- **LLM:** Claude API with prompt caching; model selectable per pass type. Keep the agent decoupled from the model so a local model can take over routine passes later.
+- **LLM:** Claude API with prompt caching; model selectable per pass type. Keep the agent decoupled from the model (the `LLM` protocol: `AnthropicLLM` + `FakeLLM`) so a local model can take over routine passes later.
+- **Two-layer agent.** Stream level (`agent.runner.synthesize_stream`) manages one stream → its `agent.md` synthesis + marked suggestions. Overseer level (`agent.overseer`) sits above all streams for prioritization/juggling and keeps durable `overseer/status.md` + `overseer/memory.md` it carries forward each run. `run_cycle` = stream passes → overseer. Both are read-mostly and conservative; usage/cost logged to the dormant `meta` stream.
 
 ## Non-negotiable constraints
 

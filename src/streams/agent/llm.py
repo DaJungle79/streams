@@ -118,11 +118,22 @@ class AnthropicLLM:
 class FakeLLM:
     """Deterministic stand-in for tests. Records calls; returns canned output."""
 
-    def __init__(self, synthesis: dict | None = None, digest_text: str = "Daily digest.", model: str = "fake-model"):
+    def __init__(
+        self,
+        synthesis: dict | None = None,
+        overseer: dict | None = None,
+        digest_text: str = "Daily digest.",
+        model: str = "fake-model",
+    ):
         self.synthesis = synthesis or {
             "current_state": "Holding steady.",
             "whats_next": "Confirm the next milestone.",
             "suggestions": ["Follow up with the vendor"],
+        }
+        self.overseer = overseer or {
+            "summary": "Focus on the trip; everything else is steady.",
+            "focus": ["Book flights"],
+            "memory": "Trip is fixed for June.",
         }
         self.digest_text = digest_text
         self.model = model
@@ -133,7 +144,8 @@ class FakeLLM:
 
     def complete_json(self, system, user, schema, *, model=None):
         self.calls.append(("json", user))
-        data = dict(self.synthesis)
+        props = (schema or {}).get("properties", {})
+        data = dict(self.overseer) if "summary" in props else dict(self.synthesis)
         return data, self._usage(user, json.dumps(data))
 
     def complete_text(self, system, user, *, model=None):
