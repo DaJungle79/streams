@@ -390,6 +390,100 @@ def cmd_index_rebuild(store: Store, args) -> int:
     return 0
 
 
+def cmd_report(store: Store, args) -> int:
+    from .report import weekly_report
+
+    print(weekly_report(store, days=args.days))
+    return 0
+
+
+def cmd_backup(store: Store, args) -> int:
+    from . import gitutil
+
+    try:
+        gitutil.run_git(store.repo, "push")
+    except Exception as exc:  # noqa: BLE001
+        print(f"backup failed: {exc}", file=sys.stderr)
+        print(f"hint: add a remote first — git -C {store.repo} remote add origin <url>", file=sys.stderr)
+        return 2
+    print("pushed to remote")
+    return 0
+
+
+def cmd_health(store: Store, args) -> int:
+    from .daemon import build_deps, health_check
+
+    cfg = _load_config(args)
+    try:
+        status = health_check(store, build_deps(cfg))
+    except Exception as exc:  # noqa: BLE001
+        print(f"health check failed to start: {exc}", file=sys.stderr)
+        return 2
+    for name, err in status.items():
+        print(f"{name:<10} {'ok' if err is None else 'FAIL: ' + err}")
+    return 0 if not any(status.values()) else 1
+
+
+def cmd_daemon_run(store: Store, args) -> int:
+    from .daemon import build_deps, run_forever
+    from .logging_setup import get_logger, setup_logging
+
+    setup_logging()
+    cfg = _load_config(args)
+    try:
+        deps = build_deps(cfg)
+    except Exception as exc:  # noqa: BLE001
+        print(f"daemon failed to start: {exc}", file=sys.stderr)
+        return 2
+    run_forever(store, deps, cfg.pass_times, cfg.poll_interval_seconds, get_logger("streams.daemon"))
+    return 0
+
+
+def cmd_daemon_once(store: Store, args) -> int:
+    from .daemon import build_deps, run_poll_tick, run_scheduled_pass
+
+    cfg = _load_config(args)
+    try:
+        deps = build_deps(cfg)
+        result = run_scheduled_pass(store, deps) if args.action == "pass" else run_poll_tick(store, deps)
+    except Exception as exc:  # noqa: BLE001
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(result)
+    return 0
+
+
+def cmd_daemon_install(store: Store, args) -> int:
+    import os
+
+    from .daemon import launchd_plist
+
+    label = "com.streams.daemon"
+    plist_path = Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"
+    log_path = str(Path.home() / "Library" / "Logs" / "streams.daemon.log")
+    program = [os.path.abspath(sys.argv[0]), "daemon", "run"]
+    if args.config:
+        program += ["--config", os.path.abspath(args.config)]
+    plist_path.parent.mkdir(parents=True, exist_ok=True)
+    plist_path.write_text(launchd_plist(label, program, str(store.repo), log_path))
+    print(f"wrote {plist_path}")
+    print(f"load it with:  launchctl load {plist_path}")
+    print(f"logs:          {log_path}")
+    return 0
+
+
+def cmd_setup(store, args) -> int:
+    from .setup import run_setup
+
+    path = args.config or "config.yaml"
+    if Path(path).exists() and input(f"{path} exists. Overwrite? [y/N]: ").strip().lower() != "y":
+        print("aborted")
+        return 1
+    run_setup(path)
+    print(f"wrote {path}")
+    return 0
+
+
 # --- parser -----------------------------------------------------------------
 
 
@@ -492,11 +586,30 @@ def build_parser() -> argparse.ArgumentParser:
     ip = sub.add_parser("index").add_subparsers(dest="action", required=True)
     p = ip.add_parser("rebuild", parents=[common]); p.set_defaults(fn=cmd_index_rebuild)
 
+    # daemon (always-on loop + launchd)
+    dp = sub.add_parser("daemon").add_subparsers(dest="action", required=True)
+    dp.add_parser("run", parents=[common]).set_defaults(fn=cmd_daemon_run)
+    dp.add_parser("pass", parents=[common]).set_defaults(fn=cmd_daemon_once)
+    dp.add_parser("tick", parents=[common]).set_defaults(fn=cmd_daemon_once)
+    dp.add_parser("install", parents=[common]).set_defaults(fn=cmd_daemon_install)
+
+    # ops
+    p = sub.add_parser("report", parents=[common]); p.add_argument("--days", type=int, default=7)
+    p.set_defaults(fn=cmd_report, group="report", action=None)
+    p = sub.add_parser("backup", parents=[common])
+    p.set_defaults(fn=cmd_backup, group="backup", action=None)
+    p = sub.add_parser("health", parents=[common])
+    p.set_defaults(fn=cmd_health, group="health", action=None)
+    p = sub.add_parser("setup", parents=[common])
+    p.set_defaults(fn=cmd_setup, group="setup", action=None)
+
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.fn is cmd_setup:  # setup writes config; don't create a data repo first
+        return cmd_setup(None, args)
     store = Store(_resolve_repo(args), author=_load_config(args).agent_name)
     try:
         return args.fn(store, args)
