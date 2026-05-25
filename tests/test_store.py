@@ -84,6 +84,13 @@ def test_archive_moves_folder(store):
     assert store.list_streams() == []
 
 
+def test_commits_authored_by_agent_name(tmp_path):
+    store = Store(tmp_path / "data", author="Mr. Streams")
+    store.create_stream("X")
+    author = gitutil.run_git(store.repo, "log", "-1", "--format=%an")
+    assert author == "Mr. Streams"
+
+
 def test_missing_stream_raises(store):
     with pytest.raises(StreamNotFound):
         store.read_stream("nope")

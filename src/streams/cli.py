@@ -324,7 +324,7 @@ def cmd_imessage_ask(store: Store, args) -> int:
 
     cfg = _load_config(args)
     try:
-        qid = ask(store, _messages_bridge(cfg), args.question, stream=args.stream)
+        qid = ask(store, _messages_bridge(cfg), args.question, stream=args.stream, signature=cfg.agent_name)
     except Exception as exc:  # noqa: BLE001
         return _imessage_error(exc)
     print(f"asked ({qid})")
@@ -336,7 +336,7 @@ def cmd_imessage_send(store: Store, args) -> int:
 
     cfg = _load_config(args)
     try:
-        send(store, _messages_bridge(cfg), args.text)
+        send(store, _messages_bridge(cfg), args.text, signature=cfg.agent_name)
     except Exception as exc:  # noqa: BLE001
         return _imessage_error(exc)
     return 0
@@ -497,7 +497,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    store = Store(_resolve_repo(args))
+    store = Store(_resolve_repo(args), author=_load_config(args).agent_name)
     try:
         return args.fn(store, args)
     except StreamNotFound as exc:

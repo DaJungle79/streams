@@ -36,6 +36,9 @@ class Config:
     # Claude models, selectable per pass type.
     model_routine: str = "claude-haiku-4-5"
     model_synthesis: str = "claude-opus-4-7"
+    # The agent's name. Signs outbound iMessages and authors git commits, so the
+    # history shows who made each edit. (Setup will prompt for this later.)
+    agent_name: str = "Streams"
     # Apple Notes account that holds the stream notes.
     notes_account: str = "iCloud"
     # Hashtag that marks a note as a stream. Managed notes carry it; a user-created

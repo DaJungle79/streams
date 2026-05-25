@@ -20,6 +20,9 @@ token_budget: 30000
 model_routine: claude-haiku-4-5
 model_synthesis: claude-opus-4-7
 
+# The agent's name. Signs outbound iMessages and authors git commits.
+agent_name: "Mr. Streams"
+
 # Apple Notes account that holds the stream notes.
 notes_account: iCloud
 

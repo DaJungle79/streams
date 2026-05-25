@@ -85,3 +85,13 @@ def test_send_is_plain_outbound(setup):
     store, bridge = setup
     send(store, bridge, "heads up: digest is ready")
     assert bridge.sent == ["heads up: digest is ready"]
+
+
+def test_signature_is_appended_but_question_stored_clean(setup):
+    store, bridge = setup
+    ask(store, bridge, "Proceed?", stream="trip", signature="Mr. Streams")
+    assert bridge.sent == ["Proceed?\n\n— Mr. Streams"]
+    # the recorded/logged question stays unsigned
+    bridge.user_reply("yes")
+    poll_inbound(store, bridge)
+    assert "Q: Proceed?\nA: yes" in store.list_events("trip")[-1].content

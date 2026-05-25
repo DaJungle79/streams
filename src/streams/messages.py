@@ -22,7 +22,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from . import gitutil
 from .core import EventSource, EventType, StreamState, new_id
 from .store import Store, StreamNotFound
 
@@ -64,7 +63,7 @@ def _save_state(store: Store, state: dict) -> None:
     path = _state_path(store)
     path.parent.mkdir(exist_ok=True)
     path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-    gitutil.commit(store.repo, "update messages state", [path])
+    store.commit("update messages state", [path])
 
 
 def _ensure_meta(store: Store) -> None:
@@ -77,9 +76,19 @@ def _ensure_meta(store: Store) -> None:
 # --- the flow ---------------------------------------------------------------
 
 
-def ask(store: Store, bridge: MessagesBridge, question: str, stream: str | None = None) -> str:
-    """Send a question over iMessage and record it as pending."""
-    bridge.send(question)
+def _sign(text: str, signature: str | None) -> str:
+    return f"{text}\n\n— {signature}" if signature else text
+
+
+def ask(
+    store: Store,
+    bridge: MessagesBridge,
+    question: str,
+    stream: str | None = None,
+    signature: str | None = None,
+) -> str:
+    """Send a (optionally signed) question over iMessage and record it pending."""
+    bridge.send(_sign(question, signature))  # store the unsigned question for the Q/A log
     state = _load_state(store)
     if state.get("cursor") is None:
         # anchor now so the reply (which will have a higher rowid) is caught
@@ -97,9 +106,9 @@ def ask(store: Store, bridge: MessagesBridge, question: str, stream: str | None 
     return qid
 
 
-def send(store: Store, bridge: MessagesBridge, text: str) -> None:
+def send(store: Store, bridge: MessagesBridge, text: str, signature: str | None = None) -> None:
     """A plain outbound nudge — no pending question recorded."""
-    bridge.send(text)
+    bridge.send(_sign(text, signature))
 
 
 def poll_inbound(store: Store, bridge: MessagesBridge) -> PollResult:

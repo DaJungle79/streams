@@ -11,15 +11,6 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-# Applied per-commit so commits succeed even with no global user.name/email set.
-_IDENTITY = [
-    "-c",
-    "user.name=Streams",
-    "-c",
-    "user.email=streams@localhost",
-]
-
-
 def run_git(repo: Path, *args: str, check: bool = True) -> str:
     proc = subprocess.run(
         ["git", "-C", str(repo), *args],
@@ -36,14 +27,25 @@ def ensure_repo(repo: Path) -> None:
         run_git(repo, "init", "-q")
 
 
-def commit(repo: Path, message: str, paths: list[Path]) -> bool:
-    """Stage and commit exactly ``paths``. Returns False if nothing changed."""
+def commit(
+    repo: Path,
+    message: str,
+    paths: list[Path],
+    name: str = "Streams",
+    email: str = "streams@localhost",
+) -> bool:
+    """Stage and commit exactly ``paths`` as ``name``. False if nothing changed.
+
+    The committer identity is applied per-commit so it works regardless of the
+    user's global git config, and ``name`` lets the configured agent sign edits.
+    """
     rel = [str(p) for p in paths]
     run_git(repo, "add", "--", *rel)
     staged = run_git(repo, "diff", "--cached", "--name-only", "--", *rel)
     if not staged:
         return False
-    run_git(repo, *_IDENTITY, "commit", "-q", "-m", message, "--", *rel)
+    identity = ["-c", f"user.name={name}", "-c", f"user.email={email}"]
+    run_git(repo, *identity, "commit", "-q", "-m", message, "--", *rel)
     return True
 
 

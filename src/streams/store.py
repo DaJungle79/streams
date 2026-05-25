@@ -44,18 +44,23 @@ class StreamNotFound(Exception):
 
 
 class Store:
-    def __init__(self, repo_path: str | Path):
+    def __init__(self, repo_path: str | Path, author: str = "Streams"):
         self.repo = Path(repo_path).expanduser()
+        self.author = author  # git commit author — the configured agent signs edits
         self.repo.mkdir(parents=True, exist_ok=True)
         gitutil.ensure_repo(self.repo)
         (self.repo / "streams").mkdir(exist_ok=True)
         self._ensure_gitignore()
 
+    def commit(self, message: str, paths: list[Path]) -> bool:
+        """Commit `paths` authored by the configured agent. False if no change."""
+        return gitutil.commit(self.repo, message, paths, name=self.author)
+
     def _ensure_gitignore(self) -> None:
         gi = self.repo / ".gitignore"
         if not gi.exists():
             gi.write_text(_GITIGNORE, encoding="utf-8")
-            gitutil.commit(self.repo, "chore: initialize data repo", [gi])
+            self.commit("chore: initialize data repo", [gi])
 
     # --- paths --------------------------------------------------------------
 
@@ -110,7 +115,7 @@ class Store:
         self._agent_md(slug).write_text("", encoding="utf-8")
         # keep the empty events dir tracked
         (self._events_dir(slug) / ".gitkeep").write_text("", encoding="utf-8")
-        gitutil.commit(self.repo, f"create stream {slug}: {title}", [d])
+        self.commit(f"create stream {slug}: {title}", [d])
         return stream
 
     def read_stream(self, slug: str) -> Stream:
@@ -127,7 +132,7 @@ class Store:
         self._stream_md(stream.id).write_text(
             markdown.format_stream(stream), encoding="utf-8"
         )
-        gitutil.commit(self.repo, f"update stream {stream.id}", [self._stream_md(stream.id)])
+        self.commit(f"update stream {stream.id}", [self._stream_md(stream.id)])
         return stream
 
     def set_note_id(self, slug: str, note_id: str) -> Stream:
@@ -141,7 +146,7 @@ class Store:
         archive_dir.mkdir(exist_ok=True)
         dest = archive_dir / slug
         shutil.move(str(self._dir(slug)), str(dest))
-        gitutil.commit(self.repo, f"archive stream {slug}", [self._dir(slug), dest])
+        self.commit(f"archive stream {slug}", [self._dir(slug), dest])
 
     # --- goals --------------------------------------------------------------
 
@@ -164,7 +169,7 @@ class Store:
         goal = Goal(id=new_id("g"), text=text, target=target, src=src)
         goals.append(goal)
         self._write_goals(slug, goals)
-        gitutil.commit(self.repo, f"add goal to {slug}: {text}", [self._goals_md(slug)])
+        self.commit(f"add goal to {slug}: {text}", [self._goals_md(slug)])
         return goal
 
     def set_goal_status(self, slug: str, goal_id: str, status: GoalStatus) -> Goal:
@@ -172,9 +177,7 @@ class Store:
         goal = _find(goals, goal_id)
         goal.status = status
         self._write_goals(slug, goals)
-        gitutil.commit(
-            self.repo, f"goal {goal_id} -> {status.value} in {slug}", [self._goals_md(slug)]
-        )
+        self.commit(f"goal {goal_id} -> {status.value} in {slug}", [self._goals_md(slug)])
         return goal
 
     def set_goal_text(self, slug: str, goal_id: str, text: str) -> Goal:
@@ -182,7 +185,7 @@ class Store:
         goal = _find(goals, goal_id)
         goal.text = text
         self._write_goals(slug, goals)
-        gitutil.commit(self.repo, f"edit goal {goal_id} in {slug}", [self._goals_md(slug)])
+        self.commit(f"edit goal {goal_id} in {slug}", [self._goals_md(slug)])
         return goal
 
     # --- todos --------------------------------------------------------------
@@ -206,7 +209,7 @@ class Store:
         todo = Todo(id=new_id("t"), text=text, due=due, src=src)
         todos.append(todo)
         self._write_todos(slug, todos)
-        gitutil.commit(self.repo, f"add todo to {slug}: {text}", [self._todos_md(slug)])
+        self.commit(f"add todo to {slug}: {text}", [self._todos_md(slug)])
         return todo
 
     def set_todo_status(
@@ -221,9 +224,7 @@ class Store:
         todo.status = status
         todo.completed = completed if status is TodoStatus.done else None
         self._write_todos(slug, todos)
-        gitutil.commit(
-            self.repo, f"todo {todo_id} -> {status.value} in {slug}", [self._todos_md(slug)]
-        )
+        self.commit(f"todo {todo_id} -> {status.value} in {slug}", [self._todos_md(slug)])
         return todo
 
     def set_todo_text(self, slug: str, todo_id: str, text: str) -> Todo:
@@ -231,7 +232,7 @@ class Store:
         todo = _find(todos, todo_id)
         todo.text = text
         self._write_todos(slug, todos)
-        gitutil.commit(self.repo, f"edit todo {todo_id} in {slug}", [self._todos_md(slug)])
+        self.commit(f"edit todo {todo_id} in {slug}", [self._todos_md(slug)])
         return todo
 
     def set_todo_reminder(self, slug: str, todo_id: str, reminder_id: str | None) -> Todo:
@@ -239,7 +240,7 @@ class Store:
         todo = _find(todos, todo_id)
         todo.reminder_id = reminder_id
         self._write_todos(slug, todos)
-        gitutil.commit(self.repo, f"link todo {todo_id} to reminder in {slug}", [self._todos_md(slug)])
+        self.commit(f"link todo {todo_id} to reminder in {slug}", [self._todos_md(slug)])
         return todo
 
     def complete_todo(self, slug: str, todo_id: str) -> Todo:
@@ -273,7 +274,7 @@ class Store:
         else:
             body = f"# Events {ts.strftime('%Y-%m')}"
         month_file.write_text(body + "\n\n" + markdown.format_event(event) + "\n", encoding="utf-8")
-        gitutil.commit(self.repo, f"append {type.value} to {slug}", [month_file])
+        self.commit(f"append {type.value} to {slug}", [month_file])
         return event
 
     def list_events(self, slug: str, month: str | None = None) -> list[Event]:
@@ -303,7 +304,7 @@ class Store:
         self._require(slug)
         body = text if text.endswith("\n") else text + "\n"
         self._notes_md(slug).write_text(body, encoding="utf-8")
-        gitutil.commit(self.repo, f"update notes for {slug}", [self._notes_md(slug)])
+        self.commit(f"update notes for {slug}", [self._notes_md(slug)])
 
     # --- agent synthesis (rendered into the note's agent zone) --------------
 
@@ -316,7 +317,7 @@ class Store:
         self._require(slug)
         body = text if text.endswith("\n") else text + "\n"
         self._agent_md(slug).write_text(body, encoding="utf-8")
-        gitutil.commit(self.repo, f"update agent synthesis for {slug}", [self._agent_md(slug)])
+        self.commit(f"update agent synthesis for {slug}", [self._agent_md(slug)])
 
     # --- overseer (high-level cross-stream status + durable memory) ----------
     # Not a stream: lives in overseer/ at the repo root. The overseer reads its
@@ -333,7 +334,7 @@ class Store:
         f = self._overseer_file(name)
         f.parent.mkdir(exist_ok=True)
         f.write_text((text.rstrip() + "\n") if text.strip() else "", encoding="utf-8")
-        gitutil.commit(self.repo, message, [f])
+        self.commit(message, [f])
 
     def read_overseer_status(self) -> str:
         return self._read_overseer("status.md")
