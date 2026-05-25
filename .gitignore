@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+
+# Test / tooling caches
+.pytest_cache/
+.ruff_cache/
+
+# Streams local runtime (these live in the data repo, ignored here too for safety)
+.index.sqlite
+.render/
+
+# Local config holds single-user identity (phone, account) — commit config.example.yaml only
+config.yaml
+
+# OS
+.DS_Store

@@ -1,0 +1,27 @@
+# Streams configuration. Copy to config.yaml and edit.
+# config.yaml is gitignored (it holds single-user identity); commit only this file.
+
+# Path to the markdown data repo (where streams/<slug>/ live).
+repo_path: ~/streams-data
+
+# Daemon scheduled-pass times (local, 24h). Three passes/day per the plan.
+pass_times:
+  - "07:00"
+  - "13:00"
+  - "19:00"
+
+# How often the daemon polls Notes / Reminders / iMessage for changes.
+poll_interval_seconds: 60
+
+# Hard token budget per agent call.
+token_budget: 30000
+
+# Claude models, selectable per pass type.
+model_routine: claude-haiku-4-5-20251001
+model_synthesis: claude-opus-4-7
+
+# Apple Notes account that holds the stream notes.
+notes_account: iCloud
+
+# The phone number / email used to match your inbound iMessage replies.
+imessage_handle: ""
