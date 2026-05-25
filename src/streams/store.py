@@ -234,6 +234,14 @@ class Store:
         gitutil.commit(self.repo, f"edit todo {todo_id} in {slug}", [self._todos_md(slug)])
         return todo
 
+    def set_todo_reminder(self, slug: str, todo_id: str, reminder_id: str | None) -> Todo:
+        todos = self.list_todos(slug)
+        todo = _find(todos, todo_id)
+        todo.reminder_id = reminder_id
+        self._write_todos(slug, todos)
+        gitutil.commit(self.repo, f"link todo {todo_id} to reminder in {slug}", [self._todos_md(slug)])
+        return todo
+
     def complete_todo(self, slug: str, todo_id: str) -> Todo:
         return self.set_todo_status(slug, todo_id, TodoStatus.done, completed=date.today())
 

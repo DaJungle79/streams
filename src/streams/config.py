@@ -41,6 +41,9 @@ class Config:
     # Hashtag that marks a note as a stream. Managed notes carry it; a user-created
     # note with this tag is auto-captured into a new stream (see streams.sync.capture_tagged).
     note_tag: str = "#stream"
+    # Apple Reminders list to push todos into. Empty = the default list. Pinning an
+    # explicit list avoids the "default list is in an account you aren't viewing" gotcha.
+    reminders_list: str = ""
     # The phone number / email used to match your inbound iMessage replies.
     imessage_handle: str = ""
     # Claude API key. If empty, the SDK falls back to the ANTHROPIC_API_KEY env var.

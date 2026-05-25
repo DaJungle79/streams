@@ -294,6 +294,25 @@ def _agent_error(exc: Exception) -> int:
     return 2
 
 
+def cmd_reminders_sync(store: Store, args) -> int:
+    from .reminders import EventKitReminders, sync_all_reminders, sync_reminders
+
+    cfg = _load_config(args)
+    list_name = cfg.reminders_list or None
+    try:
+        bridge = EventKitReminders(list_name=list_name)
+        if args.all:
+            results = sync_all_reminders(store, bridge, list_name)
+        else:
+            results = [sync_reminders(store, bridge, args.slug, list_name)]
+    except Exception as exc:  # noqa: BLE001
+        print(f"reminders error: {exc}", file=sys.stderr)
+        return 2
+    for r in results:
+        print(f"{r.slug}: pushed {r.pushed}, completed {r.completed}")
+    return 0
+
+
 def cmd_capture(store: Store, args) -> int:
     from .notes_bridge import AppleNotesBridge
     from .sync import capture_tagged
@@ -384,6 +403,12 @@ def build_parser() -> argparse.ArgumentParser:
     # capture (adopt user-created notes carrying the configured tag)
     p = sub.add_parser("capture", parents=[common])
     p.set_defaults(fn=cmd_capture, group="capture", action=None)
+
+    # reminders (push due todos + completion-back)
+    rp = sub.add_parser("reminders").add_subparsers(dest="action", required=True)
+    p = rp.add_parser("sync", parents=[common])
+    p.add_argument("slug", nargs="?"); p.add_argument("--all", action="store_true")
+    p.set_defaults(fn=cmd_reminders_sync)
 
     # agent (Claude synthesis + digest)
     ap = sub.add_parser("agent").add_subparsers(dest="action", required=True)

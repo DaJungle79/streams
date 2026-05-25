@@ -27,6 +27,9 @@ notes_account: iCloud
 # this tag and it gets auto-captured into a new stream on the next `capture`/sync.
 note_tag: "#stream"
 
+# Apple Reminders list to push todos into. Empty uses the default list.
+reminders_list: ""
+
 # The phone number / email used to match your inbound iMessage replies.
 imessage_handle: ""
 
