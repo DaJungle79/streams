@@ -184,6 +184,54 @@ def cmd_sync(store: Store, args) -> int:
     return 0
 
 
+def _agent_llm(cfg: Config):
+    from .agent.llm import AnthropicLLM
+
+    return AnthropicLLM(cfg.model_synthesis)
+
+
+def cmd_agent_pass(store: Store, args) -> int:
+    from .agent.runner import run_pass, synthesize_stream
+
+    cfg = Config.load(args.config)
+    try:
+        llm = _agent_llm(cfg)
+        if args.all:
+            results = run_pass(store, llm, budget=cfg.token_budget)
+        else:
+            results = [synthesize_stream(store, llm, args.slug, budget=cfg.token_budget)]
+    except Exception as exc:  # noqa: BLE001 — surface API/key errors plainly
+        return _agent_error(exc)
+    if not results:
+        print("no streams to process")
+    for r in results:
+        cost = f"${r.usage.cost_usd:.4f}" if r.usage else "n/a"
+        print(f"{r.slug}: {len(r.suggestions_added)} suggestion(s), cost {cost}")
+    return 0
+
+
+def cmd_agent_digest(store: Store, args) -> int:
+    from .agent.runner import daily_digest
+
+    cfg = Config.load(args.config)
+    try:
+        text, usage = daily_digest(store, _agent_llm(cfg), budget=cfg.token_budget)
+    except Exception as exc:  # noqa: BLE001
+        return _agent_error(exc)
+    print(text)
+    print(f"\n[cost ${usage.cost_usd:.4f}]", file=sys.stderr)
+    return 0
+
+
+def _agent_error(exc: Exception) -> int:
+    msg = str(exc)
+    if "api_key" in msg.lower() or "ANTHROPIC_API_KEY" in msg or "authentication" in msg.lower():
+        print("error: set ANTHROPIC_API_KEY to run agent passes", file=sys.stderr)
+    else:
+        print(f"agent error: {exc}", file=sys.stderr)
+    return 2
+
+
 def cmd_index_rebuild(store: Store, args) -> int:
     db = store.repo / ".index.sqlite"
     idx = build_index(store, db)
@@ -251,6 +299,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("sync", parents=[common])
     p.add_argument("slug", nargs="?"); p.add_argument("--all", action="store_true")
     p.set_defaults(fn=cmd_sync, group="sync", action=None)
+
+    # agent (Claude synthesis + digest)
+    ap = sub.add_parser("agent").add_subparsers(dest="action", required=True)
+    p = ap.add_parser("pass", parents=[common])
+    p.add_argument("slug", nargs="?"); p.add_argument("--all", action="store_true")
+    p.set_defaults(fn=cmd_agent_pass)
+    p = ap.add_parser("digest", parents=[common]); p.set_defaults(fn=cmd_agent_digest)
 
     # query
     qp = sub.add_parser("query").add_subparsers(dest="action", required=True)

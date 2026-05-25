@@ -34,7 +34,7 @@ class Config:
     # Hard token budget per agent call.
     token_budget: int = 30_000
     # Claude models, selectable per pass type.
-    model_routine: str = "claude-haiku-4-5-20251001"
+    model_routine: str = "claude-haiku-4-5"
     model_synthesis: str = "claude-opus-4-7"
     # Apple Notes account that holds the stream notes.
     notes_account: str = "iCloud"

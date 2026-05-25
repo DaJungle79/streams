@@ -19,7 +19,13 @@ _RECENT_EVENT_COUNT = 5
 def render(store: Store, slug: str) -> NoteDocument:
     stream = store.read_stream(slug)
 
-    agent_zone = make_zone("agent", [NoteLine(_AGENT_PLACEHOLDER)])
+    synthesis = store.read_agent(slug).strip()
+    agent_lines = (
+        [NoteLine(line) for line in synthesis.splitlines()]
+        if synthesis
+        else [NoteLine(_AGENT_PLACEHOLDER)]
+    )
+    agent_zone = make_zone("agent", agent_lines)
 
     goals = [g for g in store.list_goals(slug) if g.status is GoalStatus.active]
     goals_zone = make_zone(

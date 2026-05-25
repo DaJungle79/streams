@@ -74,6 +74,9 @@ class Store:
     def _notes_md(self, slug: str) -> Path:
         return self._dir(slug) / "notes.md"
 
+    def _agent_md(self, slug: str) -> Path:
+        return self._dir(slug) / "agent.md"
+
     def _events_dir(self, slug: str) -> Path:
         return self._dir(slug) / "events"
 
@@ -104,6 +107,7 @@ class Store:
         self._goals_md(slug).write_text(markdown.format_goals([]), encoding="utf-8")
         self._todos_md(slug).write_text(markdown.format_todos([]), encoding="utf-8")
         self._notes_md(slug).write_text("", encoding="utf-8")
+        self._agent_md(slug).write_text("", encoding="utf-8")
         # keep the empty events dir tracked
         (self._events_dir(slug) / ".gitkeep").write_text("", encoding="utf-8")
         gitutil.commit(self.repo, f"create stream {slug}: {title}", [d])
@@ -292,6 +296,19 @@ class Store:
         body = text if text.endswith("\n") else text + "\n"
         self._notes_md(slug).write_text(body, encoding="utf-8")
         gitutil.commit(self.repo, f"update notes for {slug}", [self._notes_md(slug)])
+
+    # --- agent synthesis (rendered into the note's agent zone) --------------
+
+    def read_agent(self, slug: str) -> str:
+        self._require(slug)
+        f = self._agent_md(slug)
+        return f.read_text(encoding="utf-8") if f.exists() else ""
+
+    def write_agent(self, slug: str, text: str) -> None:
+        self._require(slug)
+        body = text if text.endswith("\n") else text + "\n"
+        self._agent_md(slug).write_text(body, encoding="utf-8")
+        gitutil.commit(self.repo, f"update agent synthesis for {slug}", [self._agent_md(slug)])
 
 
 def _find(items, item_id):

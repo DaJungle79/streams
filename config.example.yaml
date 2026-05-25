@@ -17,7 +17,7 @@ poll_interval_seconds: 60
 token_budget: 30000
 
 # Claude models, selectable per pass type.
-model_routine: claude-haiku-4-5-20251001
+model_routine: claude-haiku-4-5
 model_synthesis: claude-opus-4-7
 
 # Apple Notes account that holds the stream notes.
