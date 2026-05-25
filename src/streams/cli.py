@@ -55,6 +55,16 @@ def cmd_stream_create(store: Store, args) -> int:
         args.title, state=StreamState(args.state), weight=args.weight
     )
     print(stream.id)
+    if args.note:  # opt-in: also create the Apple Note now (needs a Mac + permissions)
+        from .notes_bridge import AppleNotesBridge
+        from .sync import sync_stream
+
+        cfg = _load_config(args)
+        try:
+            sync_stream(store, AppleNotesBridge(account=cfg.notes_account), stream.id)
+            print(f"{stream.id}: note created")
+        except Exception as exc:  # noqa: BLE001 — stream already created; note is best-effort
+            print(f"warning: stream created but note sync failed: {exc}", file=sys.stderr)
     return 0
 
 
@@ -306,7 +316,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("stream").add_subparsers(dest="action", required=True)
     p = sp.add_parser("create", parents=[common]); p.add_argument("title")
     p.add_argument("--state", default="active", choices=[s.value for s in StreamState])
-    p.add_argument("--weight", type=int, default=0); p.set_defaults(fn=cmd_stream_create)
+    p.add_argument("--weight", type=int, default=0)
+    p.add_argument("--note", action="store_true", help="also create the Apple Note now")
+    p.set_defaults(fn=cmd_stream_create)
     p = sp.add_parser("list", parents=[common]); p.set_defaults(fn=cmd_stream_list)
     p = sp.add_parser("show", parents=[common]); p.add_argument("slug")
     p.set_defaults(fn=cmd_stream_show)

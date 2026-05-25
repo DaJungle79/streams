@@ -54,6 +54,14 @@ def test_env_repo_fallback(tmp_path, capsys, monkeypatch):
     assert Store(repo).read_stream("envproj").title == "EnvProj"
 
 
+def test_create_does_not_make_a_note_by_default(tmp_path, capsys):
+    # The note is created lazily by sync, not by stream creation (store stays
+    # Apple-free). Without --note, note_id remains unset.
+    repo = str(tmp_path / "data")
+    run(capsys, "stream", "create", "Solo", "--repo", repo)
+    assert Store(repo).read_stream("solo").note_id is None
+
+
 def test_missing_stream_exit_code(tmp_path, capsys):
     repo = str(tmp_path / "data")
     code = main(["stream", "show", "ghost", "--repo", repo])
