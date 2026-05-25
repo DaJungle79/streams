@@ -313,6 +313,58 @@ def cmd_reminders_sync(store: Store, args) -> int:
     return 0
 
 
+def _messages_bridge(cfg):
+    from .messages import AppleMessages
+
+    return AppleMessages(cfg.imessage_handle)
+
+
+def cmd_imessage_ask(store: Store, args) -> int:
+    from .messages import ask
+
+    cfg = _load_config(args)
+    try:
+        qid = ask(store, _messages_bridge(cfg), args.question, stream=args.stream)
+    except Exception as exc:  # noqa: BLE001
+        return _imessage_error(exc)
+    print(f"asked ({qid})")
+    return 0
+
+
+def cmd_imessage_send(store: Store, args) -> int:
+    from .messages import send
+
+    cfg = _load_config(args)
+    try:
+        send(store, _messages_bridge(cfg), args.text)
+    except Exception as exc:  # noqa: BLE001
+        return _imessage_error(exc)
+    return 0
+
+
+def cmd_imessage_poll(store: Store, args) -> int:
+    from .messages import poll_inbound
+
+    cfg = _load_config(args)
+    try:
+        result = poll_inbound(store, _messages_bridge(cfg))
+    except Exception as exc:  # noqa: BLE001
+        return _imessage_error(exc)
+    print(f"processed {result.processed}, answered {result.answered}, unrouted {result.unrouted}")
+    return 0
+
+
+def _imessage_error(exc: Exception) -> int:
+    msg = str(exc)
+    if "imessage_handle" in msg:
+        print("error: set imessage_handle in config", file=sys.stderr)
+    elif "chat.db" in msg or "unable to open" in msg.lower():
+        print("error: reading iMessage needs Full Disk Access for your terminal app", file=sys.stderr)
+    else:
+        print(f"imessage error: {exc}", file=sys.stderr)
+    return 2
+
+
 def cmd_capture(store: Store, args) -> int:
     from .notes_bridge import AppleNotesBridge
     from .sync import capture_tagged
@@ -409,6 +461,15 @@ def build_parser() -> argparse.ArgumentParser:
     p = rp.add_parser("sync", parents=[common])
     p.add_argument("slug", nargs="?"); p.add_argument("--all", action="store_true")
     p.set_defaults(fn=cmd_reminders_sync)
+
+    # imessage (two-way: ask questions out, poll replies back)
+    mp = sub.add_parser("imessage").add_subparsers(dest="action", required=True)
+    p = mp.add_parser("ask", parents=[common]); p.add_argument("question")
+    p.add_argument("--stream", help="stream the question relates to")
+    p.set_defaults(fn=cmd_imessage_ask)
+    p = mp.add_parser("send", parents=[common]); p.add_argument("text")
+    p.set_defaults(fn=cmd_imessage_send)
+    p = mp.add_parser("poll", parents=[common]); p.set_defaults(fn=cmd_imessage_poll)
 
     # agent (Claude synthesis + digest)
     ap = sub.add_parser("agent").add_subparsers(dest="action", required=True)
