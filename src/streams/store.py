@@ -103,7 +103,7 @@ class Store:
         self._stream_md(slug).write_text(markdown.format_stream(stream), encoding="utf-8")
         self._goals_md(slug).write_text(markdown.format_goals([]), encoding="utf-8")
         self._todos_md(slug).write_text(markdown.format_todos([]), encoding="utf-8")
-        self._notes_md(slug).write_text("# Notes\n", encoding="utf-8")
+        self._notes_md(slug).write_text("", encoding="utf-8")
         # keep the empty events dir tracked
         (self._events_dir(slug) / ".gitkeep").write_text("", encoding="utf-8")
         gitutil.commit(self.repo, f"create stream {slug}: {title}", [d])
@@ -125,6 +125,11 @@ class Store:
         )
         gitutil.commit(self.repo, f"update stream {stream.id}", [self._stream_md(stream.id)])
         return stream
+
+    def set_note_id(self, slug: str, note_id: str) -> Stream:
+        stream = self.read_stream(slug)
+        stream.note_id = note_id
+        return self.update_stream(stream)
 
     def archive_stream(self, slug: str) -> None:
         self._require(slug)
@@ -168,6 +173,14 @@ class Store:
         )
         return goal
 
+    def set_goal_text(self, slug: str, goal_id: str, text: str) -> Goal:
+        goals = self.list_goals(slug)
+        goal = _find(goals, goal_id)
+        goal.text = text
+        self._write_goals(slug, goals)
+        gitutil.commit(self.repo, f"edit goal {goal_id} in {slug}", [self._goals_md(slug)])
+        return goal
+
     # --- todos --------------------------------------------------------------
 
     def list_todos(self, slug: str) -> list[Todo]:
@@ -209,8 +222,19 @@ class Store:
         )
         return todo
 
+    def set_todo_text(self, slug: str, todo_id: str, text: str) -> Todo:
+        todos = self.list_todos(slug)
+        todo = _find(todos, todo_id)
+        todo.text = text
+        self._write_todos(slug, todos)
+        gitutil.commit(self.repo, f"edit todo {todo_id} in {slug}", [self._todos_md(slug)])
+        return todo
+
     def complete_todo(self, slug: str, todo_id: str) -> Todo:
         return self.set_todo_status(slug, todo_id, TodoStatus.done, completed=date.today())
+
+    def reopen_todo(self, slug: str, todo_id: str) -> Todo:
+        return self.set_todo_status(slug, todo_id, TodoStatus.open)
 
     def defer_todo(self, slug: str, todo_id: str) -> Todo:
         return self.set_todo_status(slug, todo_id, TodoStatus.deferred)

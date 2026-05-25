@@ -16,6 +16,8 @@ from pathlib import Path
 from .config import Config
 from .core import EventSource, EventType, GoalStatus, Provenance, StreamState
 from .index import build_index
+from .notedoc import serialize_text
+from .render import render
 from .store import Store, StreamNotFound
 
 
@@ -156,6 +158,32 @@ def cmd_query_recent(store: Store, args) -> int:
     return 0
 
 
+def cmd_note_preview(store: Store, args) -> int:
+    print(serialize_text(render(store, args.slug)), end="")
+    return 0
+
+
+def cmd_sync(store: Store, args) -> int:
+    # imported lazily so non-sync CLI use never touches Apple/osascript
+    from .notes_bridge import AppleNotesBridge
+    from .sync import sync_stream
+
+    cfg = Config.load(args.config)
+    bridge = AppleNotesBridge(account=cfg.notes_account)
+    slugs = [s.id for s in store.list_streams()] if args.all else [args.slug]
+    for slug in slugs:
+        result = sync_stream(store, bridge, slug)
+        if result.created:
+            print(f"{slug}: created note")
+        elif result.changes:
+            print(f"{slug}: {len(result.changes)} change(s)")
+            for c in result.changes:
+                print(f"  - {c}")
+        else:
+            print(f"{slug}: up to date")
+    return 0
+
+
 def cmd_index_rebuild(store: Store, args) -> int:
     db = store.repo / ".index.sqlite"
     idx = build_index(store, db)
@@ -216,6 +244,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(fn=cmd_note_show)
     p = np.add_parser("set", parents=[common]); p.add_argument("slug"); p.add_argument("text")
     p.set_defaults(fn=cmd_note_set)
+    p = np.add_parser("preview", parents=[common]); p.add_argument("slug")
+    p.set_defaults(fn=cmd_note_preview)
+
+    # sync (render <-> reconcile round-trip with Apple Notes)
+    p = sub.add_parser("sync", parents=[common])
+    p.add_argument("slug", nargs="?"); p.add_argument("--all", action="store_true")
+    p.set_defaults(fn=cmd_sync, group="sync", action=None)
 
     # query
     qp = sub.add_parser("query").add_subparsers(dest="action", required=True)

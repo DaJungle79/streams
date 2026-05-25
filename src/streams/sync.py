@@ -1,0 +1,109 @@
+"""Sync orchestration: the render ↔ reconcile round-trip for one stream.
+
+On each sync we read the note, reconcile any user edits into the store (user
+edits always win), then re-render from the updated store and write it back, so
+the note normalizes and stays consistent. The last-rendered document is
+persisted to ``.render/<slug>.json`` (the manifest) to serve as the reconcile
+base and to recover ids the parsed note can't carry.
+
+This is the daemon's per-stream unit of work; the full poll loop is Phase 6.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+
+from .notedoc import NoteDocument, NoteLine, Zone, make_zone
+from .notes_bridge import NotesBridge
+from .reconcile import reconcile
+from .render import render
+from .store import Store
+
+
+@dataclass
+class SyncResult:
+    slug: str
+    created: bool = False
+    changes: list[str] | None = None
+
+    def __post_init__(self) -> None:
+        if self.changes is None:
+            self.changes = []
+
+
+# --- snapshot persistence (the manifest) ------------------------------------
+
+
+def _render_dir(store: Store) -> Path:
+    d = store.repo / ".render"
+    d.mkdir(exist_ok=True)
+    return d
+
+
+def _snapshot_path(store: Store, slug: str) -> Path:
+    return _render_dir(store) / f"{slug}.json"
+
+
+def save_snapshot(store: Store, slug: str, doc: NoteDocument) -> None:
+    payload = {
+        "title": doc.title,
+        "zones": [
+            {
+                "kind": z.kind,
+                "lines": [
+                    {"text": l.text, "item_id": l.item_id, "checked": l.checked, "agent": l.agent}
+                    for l in z.lines
+                ],
+            }
+            for z in doc.zones
+        ],
+    }
+    _snapshot_path(store, slug).write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+
+def load_snapshot(store: Store, slug: str) -> NoteDocument | None:
+    path = _snapshot_path(store, slug)
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    zones: list[Zone] = []
+    for z in data["zones"]:
+        zone = make_zone(z["kind"])
+        zone.lines = [
+            NoteLine(text=l["text"], item_id=l["item_id"], checked=l["checked"], agent=l["agent"])
+            for l in z["lines"]
+        ]
+        zones.append(zone)
+    return NoteDocument(title=data["title"], zones=zones)
+
+
+# --- the round-trip ---------------------------------------------------------
+
+
+def sync_stream(store: Store, bridge: NotesBridge, slug: str) -> SyncResult:
+    stream = store.read_stream(slug)
+
+    # First time: create the note from current state and snapshot it.
+    if not stream.note_id:
+        doc = render(store, slug)
+        note_id = bridge.create_note(stream.title, doc)
+        store.set_note_id(slug, note_id)
+        save_snapshot(store, slug, doc)
+        return SyncResult(slug, created=True)
+
+    current = bridge.read_note(stream.note_id)
+    # base carries ids; fall back to a fresh render if the snapshot was lost.
+    base = load_snapshot(store, slug) or render(store, slug)
+    changes = reconcile(store, slug, base, current)
+
+    # Re-render from the (now updated) store and write back, refreshing the
+    # snapshot. Skip the write when nothing changed and we already had a
+    # snapshot, to avoid churning the note's modification date.
+    if changes or load_snapshot(store, slug) is None:
+        doc = render(store, slug)
+        bridge.write_note(stream.note_id, doc)
+        save_snapshot(store, slug, doc)
+
+    return SyncResult(slug, changes=changes)
