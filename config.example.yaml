@@ -25,3 +25,6 @@ notes_account: iCloud
 
 # The phone number / email used to match your inbound iMessage replies.
 imessage_handle: ""
+
+# Claude API key. Leave empty to use the ANTHROPIC_API_KEY environment variable instead.
+anthropic_api_key: ""

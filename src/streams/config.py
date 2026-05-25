@@ -40,6 +40,8 @@ class Config:
     notes_account: str = "iCloud"
     # The phone number / email used to match your inbound iMessage replies.
     imessage_handle: str = ""
+    # Claude API key. If empty, the SDK falls back to the ANTHROPIC_API_KEY env var.
+    anthropic_api_key: str = ""
 
     @classmethod
     def from_dict(cls, data: dict | None) -> "Config":

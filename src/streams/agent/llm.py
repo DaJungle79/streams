@@ -59,10 +59,13 @@ class LLM(Protocol):
 class AnthropicLLM:
     """Claude-backed LLM. Reads ANTHROPIC_API_KEY from the environment."""
 
-    def __init__(self, model: str, *, max_tokens: int = 2048, effort: str = "medium") -> None:
+    def __init__(
+        self, model: str, *, api_key: str | None = None, max_tokens: int = 2048, effort: str = "medium"
+    ) -> None:
         import anthropic  # lazy: keep agent import light and key-free for tests
 
-        self._client = anthropic.Anthropic()
+        # api_key=None lets the SDK read ANTHROPIC_API_KEY from the environment.
+        self._client = anthropic.Anthropic(api_key=api_key or None)
         self.model = model
         self.max_tokens = max_tokens
         self.effort = effort

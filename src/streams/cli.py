@@ -21,12 +21,26 @@ from .render import render
 from .store import Store, StreamNotFound
 
 
+def _config_path(args: argparse.Namespace) -> str | None:
+    """--config, then $STREAMS_CONFIG, then ./config.yaml if present."""
+    if args.config:
+        return args.config
+    if os.environ.get("STREAMS_CONFIG"):
+        return os.environ["STREAMS_CONFIG"]
+    local = Path("config.yaml")
+    return str(local) if local.exists() else None
+
+
+def _load_config(args: argparse.Namespace) -> Config:
+    return Config.load(_config_path(args))
+
+
 def _resolve_repo(args: argparse.Namespace) -> Path:
     if args.repo:
         return Path(args.repo).expanduser()
     if os.environ.get("STREAMS_REPO"):
         return Path(os.environ["STREAMS_REPO"]).expanduser()
-    return Config.load(args.config).repo_path
+    return _load_config(args).repo_path
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -168,7 +182,7 @@ def cmd_sync(store: Store, args) -> int:
     from .notes_bridge import AppleNotesBridge
     from .sync import sync_stream
 
-    cfg = Config.load(args.config)
+    cfg = _load_config(args)
     bridge = AppleNotesBridge(account=cfg.notes_account)
     slugs = [s.id for s in store.list_streams()] if args.all else [args.slug]
     for slug in slugs:
@@ -187,13 +201,13 @@ def cmd_sync(store: Store, args) -> int:
 def _agent_llm(cfg: Config):
     from .agent.llm import AnthropicLLM
 
-    return AnthropicLLM(cfg.model_synthesis)
+    return AnthropicLLM(cfg.model_synthesis, api_key=cfg.anthropic_api_key or None)
 
 
 def cmd_agent_pass(store: Store, args) -> int:
     from .agent.runner import run_pass, synthesize_stream
 
-    cfg = Config.load(args.config)
+    cfg = _load_config(args)
     try:
         llm = _agent_llm(cfg)
         if args.all:
@@ -213,7 +227,7 @@ def cmd_agent_pass(store: Store, args) -> int:
 def cmd_agent_digest(store: Store, args) -> int:
     from .agent.runner import daily_digest
 
-    cfg = Config.load(args.config)
+    cfg = _load_config(args)
     try:
         text, usage = daily_digest(store, _agent_llm(cfg), budget=cfg.token_budget)
     except Exception as exc:  # noqa: BLE001
