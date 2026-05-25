@@ -1,38 +1,40 @@
 # Spike results
 
-Fill in after running each spike. Verdict: **GO** / **NO-GO** / **PARTIAL**.
-These outcomes gate and shape the Phase 2/4/5 bridge work.
+Outcomes of the Phase 0 de-risking spikes. Verdict: **GO** / **NO-GO** / **PARTIAL**.
+These gate and shape the Phase 2/4/5 bridge work.
 
-## S1 — Apple Notes round-trip
+Run: 2026-05-25, macOS 26.5, by Ivo. **All three GO.**
 
-- Date / macOS version:
-- Ran by:
-- Verdict:
-- Could we create + read + get a stable id?
-- Was an external user edit detectable (mod-date / body hash)?
-- Was the user's edited text recoverable from the body HTML?
-- Did write-back preserve the user's text?
-- Gotchas (HTML body quirks, `note id` addressing, checklist handling):
-- Decision / implication for Phase 2:
+## S1 — Apple Notes round-trip — GO
 
-## S2 — iMessage two-way
+- Create + read + stable id via `osascript`: works.
+- External user edit detectable (mod-date / body hash) and edited text recoverable
+  from the body HTML: works.
+- Write-back via `set body of note id` works.
+- Implication for Phase 2: the render/reconcile loop is viable on Apple Notes.
+  Reconciler will parse the body HTML; confirm checklist (`<ul>`/checkbox) markup
+  shape when building the renderer.
 
-- Date / macOS version:
-- Ran by:
-- Verdict:
-- Inbound: did `chat.db` read work (after Full Disk Access)?
-- What fraction of recent rows had NULL `text` (need `attributedBody` decoder)?
-- Outbound: did the AppleScript send deliver?
-- Gotchas (handle matching, group threads, FDA quirks):
-- Decision / implication for Phase 5 (incl. outbound-only fallback?):
+## S2 — iMessage two-way — GO
 
-## S3 — Apple Reminders
+- Outbound (AppleScript send): works, but **only** with the form
+  `send <text> to buddy <handle> of <service>`. The earlier
+  `participant <handle> of svc` form — and naming a variable `buddy` (a reserved
+  Messages class) — fails with `-10003` "Access not allowed". Locked in the
+  working form in `s2_imessage.py`.
+- Inbound (`chat.db` read): works with **Full Disk Access** on the terminal app.
+- OPEN: `attributedBody` coverage — confirm from a `--read N` run how many recent
+  rows have NULL `message.text` (newer macOS stores body in the blob). If
+  significant, Phase 5 needs an `attributedBody` decoder for full inbound text.
+- Implication for Phase 5: two-way is viable; keep outbound-only as the fallback.
 
-- Date / macOS version:
-- Ran by:
-- Verdict:
-- Access granted via EventKit?
-- Reminder created + saved in the default list?
-- Completion status readable after checking one off?
-- Gotchas (full vs. legacy access API, default list availability):
-- Decision / implication for Phase 4:
+## S3 — Apple Reminders — GO
+
+- EventKit access (`requestFullAccessToRemindersWithCompletion:`) granted.
+- Create + save to the default list: works.
+- Completion status readable back (`isCompleted()`): works.
+- Gotcha: `defaultCalendarForNewReminders()` can resolve to a list/account you
+  aren't viewing, so a created reminder "doesn't appear" though save succeeded.
+  Spike now prints the target list + account; Phase 4 should let config pin an
+  explicit list rather than rely on the default.
+- Implication for Phase 4: push + completion-back loop is viable.

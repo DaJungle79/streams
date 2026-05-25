@@ -74,7 +74,9 @@ def create_reminder(store: "EKEventStore") -> bool:
     if not ok:
         print(f"Save failed: {error}")
         return False
-    print(f"Created reminder {TITLE!r} in list {cal.title()!r}")
+    source = cal.source().title() if cal.source() else "?"
+    print(f"Created reminder {TITLE!r} in list {cal.title()!r} (account {source!r})")
+    print("  -> open the Reminders app and look in THAT list/account.")
     return True
 
 
@@ -96,7 +98,9 @@ def list_reminders(store: "EKEventStore") -> None:
     print(f"Fetched {len(fetched)} reminders:")
     for r in fetched:
         mark = "x" if r.isCompleted() else " "
-        print(f"  [{mark}] {r.title()}")
+        cal = r.calendar()
+        where = f"{cal.title()}/{cal.source().title()}" if cal else "?"
+        print(f"  [{mark}] {r.title()}  <{where}>")
 
 
 def main() -> int:

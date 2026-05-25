@@ -72,8 +72,7 @@ def send_message(handle: str, text: str) -> None:
             set theText to item 2 of argv
             tell application "Messages"
                 set svc to 1st service whose service type = iMessage
-                set buddy to participant theHandle of svc
-                send theText to buddy
+                send theText to buddy theHandle of svc
             end tell
         end run
         """
