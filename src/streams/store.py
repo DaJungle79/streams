@@ -145,6 +145,10 @@ class Store:
         archive_dir = self.repo / "archive"
         archive_dir.mkdir(exist_ok=True)
         dest = archive_dir / slug
+        n = 1
+        while dest.exists():  # this slug was archived before — keep both, don't collide
+            n += 1
+            dest = archive_dir / f"{slug}-{n}"
         shutil.move(str(self._dir(slug)), str(dest))
         self.commit(f"archive stream {slug}", [self._dir(slug), dest])
 

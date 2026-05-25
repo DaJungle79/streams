@@ -84,6 +84,17 @@ def test_archive_moves_folder(store):
     assert store.list_streams() == []
 
 
+def test_archive_same_slug_twice_does_not_collide(store):
+    # a slug can be created, archived, recreated, and archived again (e.g. a note
+    # deleted, the stream re-made, deleted again) without clobbering the first archive.
+    store.create_stream("X")
+    store.archive_stream("x")
+    store.create_stream("X")
+    store.archive_stream("x")  # must not raise
+    assert (store.repo / "archive/x/stream.md").exists()
+    assert (store.repo / "archive/x-2/stream.md").exists()
+
+
 def test_commits_authored_by_agent_name(tmp_path):
     store = Store(tmp_path / "data", author="Mr. Streams")
     store.create_stream("X")
