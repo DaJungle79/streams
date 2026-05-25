@@ -41,8 +41,8 @@ def test_poll_tick_creates_notes_and_pushes_reminders(store, deps):
     assert store.list_todos("trip")[0].reminder_id      # pushed to reminders
 
 
-def test_poll_tick_captures_tagged_note(store, deps):
-    deps.notes.add_external_note("Captured Idea", "#stream a new idea")
+def test_poll_tick_captures_folder_note(store, deps):
+    deps.notes.add_external_note("Captured Idea", "a new idea", folder=deps.note_folder)
     summary = run_poll_tick(store, deps)
     assert "captured-idea" in summary["captured"]
     assert store.read_stream("captured-idea")

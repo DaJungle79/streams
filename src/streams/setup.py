@@ -18,7 +18,7 @@ FIELDS: list[tuple[str, str, str]] = [
     ("imessage_handle", "Your iMessage handle (phone/email)", ""),
     ("notes_account", "Apple Notes account", "iCloud"),
     ("reminders_list", "Reminders list (blank = default)", ""),
-    ("note_tag", "Stream hashtag", "#stream"),
+    ("note_folder", "Apple Notes folder for streams", "Streams"),
 ]
 
 

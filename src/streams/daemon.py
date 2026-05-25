@@ -24,7 +24,7 @@ from .messages import MessagesBridge, poll_inbound, send
 from .notes_bridge import NotesBridge
 from .reminders import RemindersBridge, sync_all_reminders
 from .store import Store, StreamNotFound
-from .sync import capture_tagged, sync_stream
+from .sync import capture_folder, sync_stream
 
 META_SLUG = "meta"
 
@@ -35,7 +35,7 @@ class Deps:
     notes: NotesBridge
     reminders: RemindersBridge
     messages: MessagesBridge | None = None
-    note_tag: str = "#stream"
+    note_folder: str = "Streams"
     reminders_list: str | None = None
     agent_name: str = "Streams"
     budget: int = DEFAULT_BUDGET
@@ -82,10 +82,10 @@ def run_poll_tick(store: Store, deps: Deps, synthesize: bool = True) -> dict:
     ``synthesize=False`` does ingest only — used by the scheduled pass, which runs
     a full ``run_cycle`` right after and would otherwise synthesize twice."""
     summary: dict = {"captured": [], "notes_synced": 0, "synthesized": [], "archived": []}
-    summary["captured"] = capture_tagged(store, deps.notes, deps.note_tag)
+    summary["captured"] = capture_folder(store, deps.notes, deps.note_folder)
     dirty: set[str] = set(summary["captured"])
     for stream in _syncable(store):
-        result = sync_stream(store, deps.notes, stream.id, tag=deps.note_tag)
+        result = sync_stream(store, deps.notes, stream.id, folder=deps.note_folder)
         if result.archived:
             summary["archived"].append(stream.id)  # note was deleted -> stream archived
         elif result.created or result.changes:
@@ -101,7 +101,7 @@ def run_poll_tick(store: Store, deps: Deps, synthesize: bool = True) -> dict:
             if not should_process(store, stream):
                 continue
             synthesize_stream(store, deps.llm, slug, deps.budget)
-            sync_stream(store, deps.notes, slug, tag=deps.note_tag)  # project synthesis back
+            sync_stream(store, deps.notes, slug, folder=deps.note_folder)  # project synthesis back
             summary["synthesized"].append(slug)
 
     summary["reminders"] = sync_all_reminders(store, deps.reminders, deps.reminders_list)
@@ -118,7 +118,7 @@ def run_scheduled_pass(store: Store, deps: Deps) -> dict:
 
     # project the refreshed agent synthesis back into the notes
     for stream in _syncable(store):
-        sync_stream(store, deps.notes, stream.id, tag=deps.note_tag)
+        sync_stream(store, deps.notes, stream.id, folder=deps.note_folder)
 
     # push due todos the agent may have surfaced
     sync_all_reminders(store, deps.reminders, deps.reminders_list)
@@ -156,7 +156,7 @@ def _probe(fn) -> str | None:
 def health_check(store: Store, deps: Deps) -> dict[str, str | None]:
     """Cheap probe of each integration. None = ok, str = error message."""
     status: dict[str, str | None] = {
-        "notes": _probe(lambda: deps.notes.find_notes_with_tag(deps.note_tag)),
+        "notes": _probe(lambda: deps.notes.find_notes_in_folder(deps.note_folder)),
         "reminders": _probe(lambda: deps.reminders.is_completed("__healthcheck__")),
     }
     if deps.messages is not None:
@@ -260,7 +260,7 @@ def build_deps(cfg) -> Deps:
         notes=AppleNotesBridge(account=cfg.notes_account),
         reminders=EventKitReminders(list_name=cfg.reminders_list or None),
         messages=AppleMessages(cfg.imessage_handle) if cfg.imessage_handle else None,
-        note_tag=cfg.note_tag,
+        note_folder=cfg.note_folder,
         reminders_list=cfg.reminders_list or None,
         agent_name=cfg.agent_name,
         budget=cfg.token_budget,

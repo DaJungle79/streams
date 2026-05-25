@@ -11,13 +11,13 @@ def test_run_setup_writes_loadable_config(tmp_path):
         "+15555550123",      # imessage handle
         "",                  # notes_account -> default iCloud
         "Work",              # reminders_list
-        "",                  # note_tag -> default #stream
+        "",                  # note_folder -> default Streams
     ])
     values = run_setup(path, input_fn=lambda _prompt: next(answers))
 
     assert values["agent_name"] == "Jarvis"
     assert values["notes_account"] == "iCloud"   # default applied on blank
-    assert values["note_tag"] == "#stream"
+    assert values["note_folder"] == "Streams"
 
     cfg = Config.load(path)                       # round-trips through the real loader
     assert cfg.agent_name == "Jarvis"

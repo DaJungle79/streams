@@ -31,9 +31,10 @@ agent_name: "Mr. Streams"
 # Apple Notes account that holds the stream notes.
 notes_account: iCloud
 
-# Hashtag marking a note as a stream. Managed notes carry it; create a note with
-# this tag and it gets auto-captured into a new stream on the next `capture`/sync.
-note_tag: "#stream"
+# Apple Notes folder that holds stream notes. Managed notes live here, and any
+# note you create in this folder is auto-captured into a new stream on the next
+# `capture`/sync. (Folders are reliable via AppleScript; native #hashtags are not.)
+note_folder: "Streams"
 
 # Apple Reminders list to push todos into. Empty uses the default list.
 reminders_list: ""

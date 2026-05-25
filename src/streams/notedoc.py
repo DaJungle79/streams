@@ -55,7 +55,6 @@ class Zone:
 class NoteDocument:
     title: str
     zones: list[Zone] = field(default_factory=list)
-    tag: str | None = None  # e.g. "#stream"; rendered under the title, read-only
 
     def zone(self, kind: str) -> Zone | None:
         return next((z for z in self.zones if z.kind == kind), None)
@@ -82,10 +81,7 @@ def format_line(kind: str, line: NoteLine) -> str:
 
 
 def serialize_text(doc: NoteDocument) -> str:
-    out: list[str] = [doc.title]
-    if doc.tag:
-        out.append(doc.tag)  # standalone line so Apple Notes treats it as a hashtag
-    out.append("")
+    out: list[str] = [doc.title, ""]
     for zone in doc.zones:
         heading = f"{AGENT_MARK} {zone.heading}" if zone.kind == "agent" else zone.heading
         out.append(heading)

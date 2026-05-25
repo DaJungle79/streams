@@ -16,7 +16,7 @@ _AGENT_PLACEHOLDER = "_(synthesis appears here after the next agent pass)_"
 _RECENT_EVENT_COUNT = 5
 
 
-def render(store: Store, slug: str, tag: str | None = None) -> NoteDocument:
+def render(store: Store, slug: str) -> NoteDocument:
     stream = store.read_stream(slug)
 
     synthesis = store.read_agent(slug).strip()
@@ -63,5 +63,4 @@ def render(store: Store, slug: str, tag: str | None = None) -> NoteDocument:
     return NoteDocument(
         title=stream.title,
         zones=[agent_zone, goals_zone, todos_zone, notes_zone, events_zone],
-        tag=tag,
     )

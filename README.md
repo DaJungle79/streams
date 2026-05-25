@@ -52,7 +52,7 @@ The reconcile rule is simple and safe: **your edits always win and reconcile fir
 ## Features
 
 - 📝 **Apple Notes as the UI** — one note per stream, two-way. Falls back to write-only without data loss if reconcile can't run.
-- 🏷️ **Capture by hashtag** — create a note tagged `#stream` and it's auto-adopted into a new stream.
+- 📁 **Capture by folder** — create a note in your `Streams` folder and it's auto-adopted into a new stream.
 - ✅ **Reminders, two-way** — open, due-dated todos become nudges; checking one off completes the todo, and vice-versa.
 - 💬 **iMessage, two-way** — the agent texts you a digest and questions; your replies route back into the right stream.
 - 🤖 **Conservative two-layer agent** — per-stream synthesis under an overseer that prioritizes across everything. "Surface, don't decide."
@@ -99,7 +99,7 @@ streams event add acme-launch "Signed first design partner" --type decision
 # the note round-trip
 streams note preview acme-launch             # see the rendered note
 streams sync                                 # reconcile edits ↔ re-render all notes
-streams capture                              # adopt any new #stream-tagged notes
+streams capture                              # adopt any new notes in the Streams folder
 
 # the agent
 streams agent cycle                          # per-stream synthesis → overseer (one full pass)

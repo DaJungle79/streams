@@ -61,7 +61,7 @@ def cmd_stream_create(store: Store, args) -> int:
 
         cfg = _load_config(args)
         try:
-            sync_stream(store, AppleNotesBridge(account=cfg.notes_account), stream.id, tag=cfg.note_tag)
+            sync_stream(store, AppleNotesBridge(account=cfg.notes_account), stream.id, folder=cfg.note_folder)
             print(f"{stream.id}: note created")
         except Exception as exc:  # noqa: BLE001 — stream already created; note is best-effort
             print(f"warning: stream created but note sync failed: {exc}", file=sys.stderr)
@@ -183,8 +183,7 @@ def cmd_query_recent(store: Store, args) -> int:
 
 
 def cmd_note_preview(store: Store, args) -> int:
-    cfg = _load_config(args)
-    print(serialize_text(render(store, args.slug, tag=cfg.note_tag)), end="")
+    print(serialize_text(render(store, args.slug)), end="")
     return 0
 
 
@@ -197,7 +196,7 @@ def cmd_sync(store: Store, args) -> int:
     bridge = AppleNotesBridge(account=cfg.notes_account)
     slugs = [s.id for s in store.list_streams()] if args.all else [args.slug]
     for slug in slugs:
-        result = sync_stream(store, bridge, slug, tag=cfg.note_tag)
+        result = sync_stream(store, bridge, slug, folder=cfg.note_folder)
         if result.created:
             print(f"{slug}: created note")
         elif result.changes:
@@ -367,16 +366,16 @@ def _imessage_error(exc: Exception) -> int:
 
 def cmd_capture(store: Store, args) -> int:
     from .notes_bridge import AppleNotesBridge
-    from .sync import capture_tagged
+    from .sync import capture_folder
 
     cfg = _load_config(args)
     try:
-        created = capture_tagged(store, AppleNotesBridge(account=cfg.notes_account), cfg.note_tag)
+        created = capture_folder(store, AppleNotesBridge(account=cfg.notes_account), cfg.note_folder)
     except Exception as exc:  # noqa: BLE001
         print(f"capture error: {exc}", file=sys.stderr)
         return 2
     if not created:
-        print(f"no new notes tagged {cfg.note_tag}")
+        print(f"no new notes in folder {cfg.note_folder!r}")
     for slug in created:
         print(f"captured: {slug}")
     return 0
@@ -553,7 +552,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("slug", nargs="?"); p.add_argument("--all", action="store_true")
     p.set_defaults(fn=cmd_sync, group="sync", action=None)
 
-    # capture (adopt user-created notes carrying the configured tag)
+    # capture (adopt user-created notes in the configured folder)
     p = sub.add_parser("capture", parents=[common])
     p.set_defaults(fn=cmd_capture, group="capture", action=None)
 
