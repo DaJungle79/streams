@@ -13,6 +13,11 @@ pass_times:
 # How often the daemon polls Notes / Reminders / iMessage for changes.
 poll_interval_seconds: 60
 
+# Run one full pass (synthesis + overseer) immediately on daemon startup,
+# regardless of pass_times — so a restart/reboot refreshes the overseer report.
+# Set false to only ever run at pass_times.
+pass_on_start: true
+
 # Hard token budget per agent call.
 token_budget: 30000
 

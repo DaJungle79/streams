@@ -435,7 +435,14 @@ def cmd_daemon_run(store: Store, args) -> int:
     except Exception as exc:  # noqa: BLE001
         print(f"daemon failed to start: {exc}", file=sys.stderr)
         return 2
-    run_forever(store, deps, cfg.pass_times, cfg.poll_interval_seconds, get_logger("streams.daemon"))
+    run_forever(
+        store,
+        deps,
+        cfg.pass_times,
+        cfg.poll_interval_seconds,
+        run_on_start=cfg.pass_on_start,
+        logger=get_logger("streams.daemon"),
+    )
     return 0
 
 

@@ -54,6 +54,11 @@ retro-fires passes already done today. The pass's digest iMessage is sent only
 when the overseer summary changed since the last one — an unchanged summary is
 not re-sent.
 
+On startup the daemon runs one full pass (synthesis + overseer) regardless of
+schedule, so a restart/reboot refreshes the overseer report immediately; the
+digest dedup keeps this quiet when nothing changed. Disable with
+`pass_on_start: false` in `config.yaml`.
+
 ### launchd (keep it alive)
 
 ```sh

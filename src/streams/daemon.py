@@ -184,6 +184,7 @@ def run_forever(
     deps: Deps,
     pass_times: tuple[str, ...],
     poll_interval: int,
+    run_on_start: bool = True,
     logger: logging.Logger | None = None,
 ) -> None:  # pragma: no cover — the loop itself isn't unit-tested
     log = logger or logging.getLogger("streams.daemon")
@@ -192,6 +193,14 @@ def run_forever(
     # recorded for today are reloaded each tick so a restart can't re-fire them.
     last_hm = datetime.now().strftime("%H:%M")
     log.info("daemon started (passes at %s, poll every %ss)", ", ".join(pass_times), poll_interval)
+    # One pass on startup so a restart/reboot refreshes the overseer report
+    # regardless of schedule (the digest dedup keeps it quiet if nothing changed).
+    if run_on_start:
+        log.info("running an overseer pass on startup")
+        try:
+            run_scheduled_pass(store, deps)
+        except Exception:  # noqa: BLE001 — a failed startup pass must not stop the loop
+            log.exception("startup pass failed")
     while True:
         try:
             now = datetime.now()

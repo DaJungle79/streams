@@ -31,6 +31,11 @@ class Config:
     pass_times: tuple[str, ...] = DEFAULT_PASS_TIMES
     # How often the daemon polls Notes / Reminders / iMessage for changes.
     poll_interval_seconds: int = 60
+    # Run one full pass (synthesis + overseer) immediately on daemon startup,
+    # regardless of pass_times — so a restart/reboot refreshes the overseer report
+    # without waiting for the next scheduled slot. The digest dedup avoids re-sending
+    # an unchanged summary, so this is quiet when nothing changed.
+    pass_on_start: bool = True
     # Hard token budget per agent call.
     token_budget: int = 30_000
     # Claude models, selectable per pass type.

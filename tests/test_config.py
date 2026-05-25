@@ -10,6 +10,13 @@ def test_defaults():
     assert cfg.poll_interval_seconds == 60
     assert len(cfg.pass_times) == 3
     assert cfg.repo_path == Path.home() / "streams-data"
+    assert cfg.pass_on_start is True
+
+
+def test_pass_on_start_loads_from_file(tmp_path: Path):
+    p = tmp_path / "config.yaml"
+    p.write_text("pass_on_start: false\n", encoding="utf-8")
+    assert Config.load(p).pass_on_start is False
 
 
 def test_load_none_returns_defaults():
