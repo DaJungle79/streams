@@ -65,6 +65,13 @@ def test_scheduled_pass_synthesizes_and_pushes_digest(store, deps):
     assert "Mr. Streams" in deps.messages.sent[-1]       # signed
 
 
+def test_scheduled_pass_skips_unchanged_digest(store, deps):
+    run_scheduled_pass(store, deps)
+    assert len(deps.messages.sent) == 1                  # first pass nudges
+    run_scheduled_pass(store, deps)
+    assert len(deps.messages.sent) == 1                  # same summary -> not re-sent
+
+
 def test_health_check_all_ok(store, deps):
     assert health_check(store, deps) == {"notes": None, "reminders": None, "imessage": None}
 

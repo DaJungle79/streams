@@ -9,6 +9,7 @@ catches per-tick errors so one failure never kills the daemon.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from dataclasses import dataclass
@@ -44,6 +45,30 @@ def _syncable(store: Store):
     return [s for s in store.list_streams() if s.id != META_SLUG]
 
 
+# --- daemon state (daemon/state.json, committed) ----------------------------
+# Two pieces of cross-tick memory: which scheduled passes already fired today
+# (so a restart doesn't re-run them) and the last digest we sent (so an
+# unchanged summary isn't re-sent every pass).
+
+
+def _state_path(store: Store):
+    return store.repo / "daemon" / "state.json"
+
+
+def _load_state(store: Store) -> dict:
+    path = _state_path(store)
+    if path.exists():
+        return json.loads(path.read_text(encoding="utf-8"))
+    return {}
+
+
+def _save_state(store: Store, state: dict) -> None:
+    path = _state_path(store)
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    store.commit("update daemon state", [path])
+
+
 # --- the two units of work --------------------------------------------------
 
 
@@ -75,8 +100,14 @@ def run_scheduled_pass(store: Store, deps: Deps) -> dict:
     # push due todos the agent may have surfaced
     sync_all_reminders(store, deps.reminders, deps.reminders_list)
 
+    # nudge the digest only when it actually changed — the overseer returns a
+    # summary every pass, so an unconditional send is one message per pass.
     if deps.messages is not None and overseer.summary:
-        send(store, deps.messages, overseer.summary, signature=deps.agent_name)
+        state = _load_state(store)
+        if overseer.summary != state.get("last_digest"):
+            send(store, deps.messages, overseer.summary, signature=deps.agent_name)
+            state["last_digest"] = overseer.summary
+            _save_state(store, state)
 
     health = health_check(store, deps)
     _log_pass(store, len(stream_results), health)
@@ -133,18 +164,28 @@ def run_forever(
     logger: logging.Logger | None = None,
 ) -> None:  # pragma: no cover — the loop itself isn't unit-tested
     log = logger or logging.getLogger("streams.daemon")
-    done: set[tuple[str, str]] = set()
+    # Seed from now so a (re)start never retro-fires passes already in the past;
+    # a pass fires only when the running clock *crosses* its time. Marks already
+    # recorded for today are reloaded each tick so a restart can't re-fire them.
+    last_hm = datetime.now().strftime("%H:%M")
     log.info("daemon started (passes at %s, poll every %ss)", ", ".join(pass_times), poll_interval)
     while True:
         try:
             now = datetime.now()
             today = now.date().isoformat()
-            done = {k for k in done if k[0] == today}  # forget yesterday's marks
+            now_hm = now.strftime("%H:%M")
+            state = _load_state(store)
+            done = set(state.get("passes_done", [])) if state.get("schedule_date") == today else set()
             for t in pass_times:
-                if now.strftime("%H:%M") >= t and (today, t) not in done:
+                if t not in done and last_hm < t <= now_hm:  # clock crossed t
                     log.info("scheduled pass for %s", t)
                     run_scheduled_pass(store, deps)
-                    done.add((today, t))
+                    done.add(t)
+                    state = _load_state(store)  # re-read: the pass may have written last_digest
+                    state["schedule_date"] = today
+                    state["passes_done"] = sorted(done)
+                    _save_state(store, state)
+            last_hm = now_hm
             run_poll_tick(store, deps)
         except Exception:  # noqa: BLE001 — never let one tick kill the daemon
             log.exception("daemon tick failed")
