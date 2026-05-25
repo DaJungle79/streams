@@ -4,39 +4,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Greenfield. The only content so far is `streams-brief.md` (the validated project brief). There is no code, no git repo, no build tooling, and no tests yet. When implementation begins, update this file with real commands. Until then, the brief is the source of truth for architecture and scope — read it before making structural decisions.
+Pre-implementation. Current content is `streams-brief.md` (validated brief) and `docs/plan.md` (phased build plan). No application code or tests yet. When implementation begins, replace this section with real build/test/run commands. Until then, **`docs/plan.md` is the operative source for architecture and sequencing; `streams-brief.md` for scope and requirements** — read both before making structural decisions.
 
 ## What Streams is
 
-A headless personal operating system for running 10–20 parallel ventures, accessed entirely through existing surfaces (Claude desktop/mobile, terminal, Apple Reminders, Apple Notes) with **zero dedicated UI**. An AI agent autonomously organizes commitments, surfaces priorities, and maintains an auditable timeline across streams. Single-user (v1), runs as one always-on process on a Mac mini.
+A headless personal operating system for running 10–20 parallel ventures, accessed entirely through **existing Apple surfaces (Apple Notes, Apple Reminders, iMessage) plus a terminal CLI** — zero dedicated UI. A single always-on daemon on a Mac mini renders each stream into an Apple Note, reconciles the user's edits back, runs scheduled agent passes for synthesis, and maintains an auditable git timeline. Single-user (v1).
 
-## Architecture (intended)
+## Architecture
 
-The system is one MCP server plus a sync layer. Key structural decisions, all load-bearing:
+A single **always-on daemon**; markdown-in-git is the source of truth; **Apple Notes is the primary UI** (one note ↔ one stream, both rendered output and editable input). Load-bearing decisions:
 
-- **Markdown-in-git is the source of truth.** Each Stream is a markdown file/folder holding: goal(s), TODO list, append-only event log, free-form notes, and weight/state (`active` / `maintenance` / `dormant`). Every change is committed; revert = git revert, restore = git clone. The repo must stay portable.
-- **Event logs are append-only and sharded by month** at `streams/<name>/events/YYYY-MM.md` to keep individual files small. Design this on day one — do not defer it until data accumulates (explicit Go condition in the brief).
-- **SQLite is a disposable index, not storage.** Rebuilt nightly from markdown to power fast cross-stream queries. Never treat it as authoritative.
-- **Three access surfaces over one internal API:** (1) MCP server exposing tools for stream CRUD, event append, TODO management, agent invocation, and cross-stream queries; (2) a thin CLI wrapper over the *same* internal API; (3) the agent itself. The CLI and MCP server must not duplicate logic — both call the shared core.
-- **Agent passes** run scheduled (morning + evening, via `launchd`) and on-demand. Every agent write produces an `agent-note` event capturing prompt context, action taken, and reasoning — this is the audit trail.
-- **Apple sync bridges:** Reminders via EventKit (Swift/AppleScript), two-way, for TODOs. Notes via AppleScript/JXA, two-way for synthesis notes and ingestion. Notes sync is known-fragile — it **must** ship with a one-way (write-only) fallback and a health check that surfaces failures into the morning digest.
-- **LLM:** Claude API for all agent reasoning in v1. Keep the agent decoupled from the model so a local model can take over routine passes later without rewiring.
+- **A Stream is a folder = metadata + four sub-object collections: goals, todos, events, notes.** Layout: `streams/<slug>/` with `stream.md` (frontmatter: id, title, state, weight, note_id, created), `goals.md`, `todos.md`, `notes.md`, and `events/YYYY-MM.md` (append-only, monthly-sharded). Goals are a first-class collection, not a frontmatter field.
+- **Markdown-in-git is authoritative.** Every change is committed; revert = git, restore = git clone. Keep the repo portable.
+- **SQLite is a disposable index**, rebuilt nightly from markdown for cross-stream queries + recency retrieval. Never authoritative.
+- **Layered core, surface-agnostic:** `core` (domain) → `store` (markdown/git) → `index` (sqlite) → `notes` (render/reconcile) → `apple` (bridges) → `agent` (Claude loop) → `daemon` (scheduler/poll) / `cli`. Each layer depends only on inner ones. The CLI and (future) MCP must call the shared core, never duplicate logic.
+- **The note round-trip is the make-or-break component.** A note is both rendered output and editable input, with **delimited zones**: user-owned (goals, todo checklist, free *Notes/Thoughts*), agent-owned (current state, what's next, suggestions), read-only (recent events). Reconcile rule: **user edits always win and reconcile first; the agent only rewrites its own zones.** Structured edits (checkbox/add/remove/goal) are handled deterministically via the `.render/<slug>.json` manifest; the free-form region uses the LLM.
+- **No change-events from Apple** — the daemon **polls** Notes (mod-date/hash), Reminders (completion), and iMessage (`chat.db`).
+- **Apple bridges, all-Python where possible:** pyobjc/EventKit for Reminders; AppleScript/JXA for Notes; `chat.db` SQLite read + AppleScript send for iMessage. Put bridges behind interfaces so core/agent test with fakes (no Mac in CI). Needs macOS Automation, Reminders, and **Full Disk Access** (chat.db) permissions.
+- **LLM:** Claude API with prompt caching; model selectable per pass type. Keep the agent decoupled from the model so a local model can take over routine passes later.
 
 ## Non-negotiable constraints
 
-These come straight from the brief's risk analysis and Go conditions — respect them even under time pressure:
+From the brief's risk analysis and Go conditions — respect even under time pressure:
 
-- **FR-11 — agent-item markers are not optional.** Agent-created TODOs/events must be visually distinguishable from user-created ones (flag/marker). This is the primary control for the #1 risk (agent noise → trust collapse). Do not drop it to save time.
-- **Token budget per agent call is hard-capped** (configurable). Assemble context via recency-weighted *retrieval*, never bulk-load. Plan for monthly event-log compaction and semantic search over notes.
-- **Stream weight/state drives prioritization:** `dormant` streams are excluded from the daily digest; `maintenance` streams surface only on material change.
-- **Provenance is tracked everywhere.** Events carry source (`manual` / `agent` / `sync`) and type (`event` / `decision` / `agent-note`). TODOs carry provenance (`user` / `agent` / `reminders-sync`). Decisions are events with `type: decision` — there is no separate decision entity in v1.
-- **Multi-tenancy boundary discipline.** v1 is single-user, but auth/identity assumptions must live in one thin layer. Keep the data model and agent logic stream-scoped; never bake single-user assumptions into file paths or agent prompts.
+- **Spike before building the fragile bits.** Apple Notes round-trip (S1) and iMessage `chat.db` read (S2) get go/no-go spikes in Phase 0, before the domain is built around them.
+- **FR-11 — agent-item markers are not optional.** Agent-created todos/suggestions must be visually distinct in the note (e.g. 🤖). Primary control for the agent-noise → trust-collapse risk.
+- **Conservative agent first.** "Surface, don't decide" prompt; measure noise for 7 days before adding autonomy.
+- **Token budget per agent call is hard-capped** (configurable). Assemble context via recency-weighted *retrieval*, never bulk-load. Plan monthly event-log compaction + semantic search over notes.
+- **Stream weight/state drives prioritization:** `dormant` excluded from the daily digest; `maintenance` surfaces only on material change.
+- **Provenance everywhere.** Events: source (`manual`/`agent`/`sync`) + type (`event`/`decision`/`agent-note`). Todos: provenance (`user`/`agent`/`reminders-sync`). Goals: provenance (`user`/`agent`). Decisions are events with `type: decision` — no separate decision entity in v1.
+- **Apple sync resilience.** Notes two-way falls back to one-way write-only without data loss; iMessage falls back to outbound-only. Surface sync health in the morning digest.
+- **Multi-tenancy boundary discipline.** Confine single-user identity (iMessage number, Notes account, repo path) to `config.yaml`. Keep data model and agent logic stream-scoped; never bake single-user assumptions into file paths or prompts.
 
 ## Stack
 
-- Python 3.12+.
-- macOS-only host (Mac mini, M1). `launchd` for scheduling; EventKit + AppleScript/JXA for Apple integration.
+- Python 3.12+, `uv` for env/deps. macOS-only host (Mac mini, M1).
+- `launchd` supervises the daemon; an internal scheduler runs the 3×/day passes and poll cadences.
+- anthropic SDK (prompt caching); git via subprocess; SQLite stdlib.
 
 ## Out of scope for v1 (don't build these)
 
-Gmail/Calendar ingestion, generic webhooks, stream nesting/hierarchy, full agent review queue with confidence thresholds, any web UI/dashboard, multi-user/sharing, native mobile app, voice capture, separate decision-log entity, local LLM execution.
+MCP server / Claude-desktop surface (deferred — keep core surface-agnostic so it's a thin add later), Gmail/Calendar ingestion, generic webhooks, stream nesting/hierarchy, full agent review queue with confidence thresholds, web UI/dashboard, general capture of arbitrary new Reminders (v1 Reminders is push + completion-back only), multi-user/sharing, native mobile app, voice capture, separate decision-log entity, local LLM execution.
