@@ -26,6 +26,13 @@ from typing import Protocol
 from .notedoc import NoteDocument, parse_text, serialize_text
 
 
+class NoteGone(Exception):
+    """The target note no longer exists or sits in Recently Deleted (uneditable).
+
+    Raised by the bridge so the sync layer can react to a user-deleted note
+    instead of crashing on the raw osascript error."""
+
+
 @dataclass
 class NoteRef:
     """A lightweight reference to an existing note (for tag discovery/capture)."""
@@ -67,9 +74,13 @@ class FakeNotesBridge:
         return note_id
 
     def read_note(self, note_id: str) -> NoteDocument:
+        if note_id not in self.notes:
+            raise NoteGone(note_id)
         return parse_text(self.notes[note_id])
 
     def write_note(self, note_id: str, doc: NoteDocument) -> None:
+        if note_id not in self.notes:
+            raise NoteGone(note_id)
         self.notes[note_id] = serialize_text(doc)
         self.titles[note_id] = doc.title
 
@@ -83,6 +94,11 @@ class FakeNotesBridge:
     # test helper: simulate a user editing the note in the Notes app
     def user_edit(self, note_id: str, transform) -> None:
         self.notes[note_id] = transform(self.notes[note_id])
+
+    # test helper: simulate a user deleting the note (subsequent r/w raise NoteGone)
+    def delete_note(self, note_id: str) -> None:
+        self.notes.pop(note_id, None)
+        self.titles.pop(note_id, None)
 
     # test helper: simulate a user creating their own (untracked) note
     def add_external_note(self, title: str, text: str) -> str:
@@ -126,7 +142,12 @@ class AppleNotesBridge:
             ["osascript", "-", *args], input=script, capture_output=True, text=True
         )
         if proc.returncode != 0:
-            raise RuntimeError(proc.stderr.strip() or "osascript failed")
+            err = proc.stderr.strip()
+            low = err.lower()
+            # a deleted note ("Recently Deleted") or a purged one ("can't get note id")
+            if "recently deleted" in low or "get note id" in low:
+                raise NoteGone(err)
+            raise RuntimeError(err or "osascript failed")
         return proc.stdout.strip()
 
     def create_note(self, title: str, doc: NoteDocument) -> str:

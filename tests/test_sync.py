@@ -80,6 +80,23 @@ def test_sync_projects_agent_synthesis(setup):
     assert "Holding steady" in bridge.notes[note_id]     # ...but synthesis is projected
 
 
+def test_sync_archives_stream_when_note_deleted(setup):
+    """A user-deleted note archives the stream (markdown preserved) instead of crashing."""
+    from streams.store import StreamNotFound
+
+    store, bridge = setup
+    sync_stream(store, bridge, "trip")
+    note_id = store.read_stream("trip").note_id
+
+    bridge.delete_note(note_id)                       # user deletes it in Notes
+    result = sync_stream(store, bridge, "trip")
+
+    assert result.archived
+    with pytest.raises(StreamNotFound):
+        store.read_stream("trip")
+    assert (store.repo / "archive" / "trip").exists()  # recoverable via git
+
+
 def test_sync_recovers_when_snapshot_lost(setup):
     store, bridge = setup
     sync_stream(store, bridge, "trip")

@@ -81,12 +81,14 @@ def run_poll_tick(store: Store, deps: Deps, synthesize: bool = True) -> dict:
 
     ``synthesize=False`` does ingest only — used by the scheduled pass, which runs
     a full ``run_cycle`` right after and would otherwise synthesize twice."""
-    summary: dict = {"captured": [], "notes_synced": 0, "synthesized": []}
+    summary: dict = {"captured": [], "notes_synced": 0, "synthesized": [], "archived": []}
     summary["captured"] = capture_tagged(store, deps.notes, deps.note_tag)
     dirty: set[str] = set(summary["captured"])
     for stream in _syncable(store):
         result = sync_stream(store, deps.notes, stream.id, tag=deps.note_tag)
-        if result.created or result.changes:
+        if result.archived:
+            summary["archived"].append(stream.id)  # note was deleted -> stream archived
+        elif result.created or result.changes:
             summary["notes_synced"] += 1
             dirty.add(stream.id)
 

@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .notedoc import NoteDocument, NoteLine, Zone, make_zone
-from .notes_bridge import NotesBridge
+from .notes_bridge import NoteGone, NotesBridge
 from .reconcile import reconcile
 from .render import render
 from .store import Store
@@ -27,6 +27,7 @@ class SyncResult:
     slug: str
     created: bool = False
     changes: list[str] | None = None
+    archived: bool = False  # the note was deleted -> the stream was archived
 
     def __post_init__(self) -> None:
         if self.changes is None:
@@ -97,20 +98,26 @@ def sync_stream(store: Store, bridge: NotesBridge, slug: str, tag: str | None = 
         save_snapshot(store, slug, doc)
         return SyncResult(slug, created=True)
 
-    current = bridge.read_note(stream.note_id)
-    # base carries ids; fall back to a fresh render if the snapshot was lost.
-    snapshot = load_snapshot(store, slug)
-    base = snapshot or render(store, slug, tag=tag)
-    changes = reconcile(store, slug, base, current)
+    try:
+        current = bridge.read_note(stream.note_id)
+        # base carries ids; fall back to a fresh render if the snapshot was lost.
+        snapshot = load_snapshot(store, slug)
+        base = snapshot or render(store, slug, tag=tag)
+        changes = reconcile(store, slug, base, current)
 
-    # Re-render from the (now updated) store and write back when the output
-    # actually differs from what the note last showed — this covers user edits
-    # *and* fresh agent synthesis written to agent.md since the last sync. Skip
-    # the write when render == snapshot, to avoid churning the modification date.
-    doc = render(store, slug, tag=tag)
-    if snapshot is None or _doc_payload(doc) != _doc_payload(snapshot):
-        bridge.write_note(stream.note_id, doc)
-        save_snapshot(store, slug, doc)
+        # Re-render from the (now updated) store and write back when the output
+        # actually differs from what the note last showed — this covers user
+        # edits *and* fresh agent synthesis written since the last sync. Skip the
+        # write when render == snapshot, to avoid churning the modification date.
+        doc = render(store, slug, tag=tag)
+        if snapshot is None or _doc_payload(doc) != _doc_payload(snapshot):
+            bridge.write_note(stream.note_id, doc)
+            save_snapshot(store, slug, doc)
+    except NoteGone:
+        # the user deleted the managed note; markdown is authoritative and is
+        # preserved in archive/ (recoverable via git).
+        store.archive_stream(slug)
+        return SyncResult(slug, archived=True)
 
     return SyncResult(slug, changes=changes)
 

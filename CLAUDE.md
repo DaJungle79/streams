@@ -51,7 +51,7 @@ From the brief's risk analysis and Go conditions — respect even under time pre
 - **Token budget per agent call is hard-capped** (configurable). Assemble context via recency-weighted *retrieval*, never bulk-load. Plan monthly event-log compaction + semantic search over notes.
 - **Stream weight/state drives prioritization:** `dormant` excluded from the daily digest; `maintenance` surfaces only on material change.
 - **Provenance everywhere.** Events: source (`manual`/`agent`/`sync`) + type (`event`/`decision`/`agent-note`). Todos: provenance (`user`/`agent`/`reminders-sync`). Goals: provenance (`user`/`agent`). Decisions are events with `type: decision` — no separate decision entity in v1.
-- **Apple sync resilience.** Notes two-way falls back to one-way write-only without data loss; iMessage falls back to outbound-only. Surface sync health in the morning digest.
+- **Apple sync resilience.** Notes two-way falls back to one-way write-only without data loss; iMessage falls back to outbound-only. Surface sync health in the morning digest. A managed note found deleted (Recently Deleted / purged) raises `NoteGone` from the bridge; `sync_stream` then archives the stream to `archive/` (markdown preserved, recoverable via git) rather than crashing — deleting a note is the de-facto "retire this stream" gesture.
 - **Multi-tenancy boundary discipline.** Confine single-user identity (iMessage number, Notes account, repo path) to `config.yaml`. Keep data model and agent logic stream-scoped; never bake single-user assumptions into file paths or prompts.
 
 ## Stack

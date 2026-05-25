@@ -64,6 +64,15 @@ def test_poll_tick_synthesizes_changed_stream(store, deps):
     assert run_poll_tick(store, deps)["synthesized"] == []  # quiet tick: nothing to process
 
 
+def test_poll_tick_archives_deleted_note(store, deps):
+    run_poll_tick(store, deps)                            # creates the note
+    nid = store.read_stream("trip").note_id
+    deps.notes.delete_note(nid)                           # user deletes it
+    summary = run_poll_tick(store, deps)                  # must not crash
+    assert "trip" in summary["archived"]
+    assert summary["synthesized"] == []                   # archived stream isn't synthesized
+
+
 def test_scheduled_pass_does_not_double_synthesize(store, deps):
     result = run_scheduled_pass(store, deps)
     # the pass's ingest tick must not synthesize — run_cycle does it once
