@@ -56,6 +56,21 @@ def test_poll_tick_completion_back(store, deps):
     assert store.list_todos("trip")[0].status is TodoStatus.done
 
 
+def test_poll_tick_synthesizes_changed_stream(store, deps):
+    summary = run_poll_tick(store, deps)
+    assert "trip" in summary["synthesized"]              # newly-surfaced stream processed now
+    nid = store.read_stream("trip").note_id
+    assert "Holding steady" in deps.notes.notes[nid]     # synthesis projected back to the note
+    assert run_poll_tick(store, deps)["synthesized"] == []  # quiet tick: nothing to process
+
+
+def test_scheduled_pass_does_not_double_synthesize(store, deps):
+    result = run_scheduled_pass(store, deps)
+    # the pass's ingest tick must not synthesize — run_cycle does it once
+    assert result["tick"]["synthesized"] == []
+    assert result["streams"] >= 1
+
+
 def test_scheduled_pass_synthesizes_and_pushes_digest(store, deps):
     result = run_scheduled_pass(store, deps)
     assert result["streams"] >= 1

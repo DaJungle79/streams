@@ -64,6 +64,22 @@ def test_user_adds_todo_and_thought_together(setup):
     assert "sunscreen" in store.read_notes("trip")
 
 
+def test_sync_projects_agent_synthesis(setup):
+    """Fresh agent synthesis reaches the note even without a user edit."""
+    from streams.agent.llm import FakeLLM
+    from streams.agent.runner import synthesize_stream
+
+    store, bridge = setup
+    sync_stream(store, bridge, "trip")
+    note_id = store.read_stream("trip").note_id
+    assert "Holding steady" not in bridge.notes[note_id]
+
+    synthesize_stream(store, FakeLLM(), "trip")
+    result = sync_stream(store, bridge, "trip")
+    assert result.changes == []                          # no user edits...
+    assert "Holding steady" in bridge.notes[note_id]     # ...but synthesis is projected
+
+
 def test_sync_recovers_when_snapshot_lost(setup):
     store, bridge = setup
     sync_stream(store, bridge, "trip")

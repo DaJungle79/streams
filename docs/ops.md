@@ -40,7 +40,8 @@ Messages into its own Apple ID and save *that* as the agent contact.)
 ```sh
 uv run streams daemon run        # foreground: scheduled passes + poll loop
 uv run streams daemon pass       # run one scheduled pass now (ingest -> think -> project)
-uv run streams daemon tick       # run one poll tick now (reconcile edits, completions, replies)
+uv run streams daemon tick       # run one poll tick now (reconcile edits, completions, replies;
+                                 #   synthesizes + writes back any stream whose note just changed)
 ```
 
 The daemon runs a poll tick every `poll_interval_seconds` and a full scheduled

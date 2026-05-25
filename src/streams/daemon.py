@@ -18,12 +18,12 @@ from datetime import datetime
 from .agent.context import DEFAULT_BUDGET
 from .agent.llm import LLM
 from .agent.overseer import run_cycle
-from .agent.runner import ensure_meta
+from .agent.runner import ensure_meta, should_process, synthesize_stream
 from .core import EventSource, EventType
 from .messages import MessagesBridge, poll_inbound, send
 from .notes_bridge import NotesBridge
 from .reminders import RemindersBridge, sync_all_reminders
-from .store import Store
+from .store import Store, StreamNotFound
 from .sync import capture_tagged, sync_stream
 
 META_SLUG = "meta"
@@ -72,15 +72,36 @@ def _save_state(store: Store, state: dict) -> None:
 # --- the two units of work --------------------------------------------------
 
 
-def run_poll_tick(store: Store, deps: Deps) -> dict:
+def run_poll_tick(store: Store, deps: Deps, synthesize: bool = True) -> dict:
     """Frequent ingest: capture new tagged notes, reconcile note edits, pull
-    reminder completions, and route inbound iMessage replies."""
-    summary: dict = {"captured": [], "notes_synced": 0}
+    reminder completions, and route inbound iMessage replies. A stream whose note
+    just changed (or was just captured) is synthesized immediately so newly
+    surfaced information is processed without waiting for the next scheduled
+    pass; the refreshed synthesis is then projected back into the note.
+
+    ``synthesize=False`` does ingest only — used by the scheduled pass, which runs
+    a full ``run_cycle`` right after and would otherwise synthesize twice."""
+    summary: dict = {"captured": [], "notes_synced": 0, "synthesized": []}
     summary["captured"] = capture_tagged(store, deps.notes, deps.note_tag)
+    dirty: set[str] = set(summary["captured"])
     for stream in _syncable(store):
         result = sync_stream(store, deps.notes, stream.id, tag=deps.note_tag)
         if result.created or result.changes:
             summary["notes_synced"] += 1
+            dirty.add(stream.id)
+
+    if synthesize:
+        for slug in sorted(dirty):
+            try:
+                stream = store.read_stream(slug)
+            except StreamNotFound:
+                continue
+            if not should_process(store, stream):
+                continue
+            synthesize_stream(store, deps.llm, slug, deps.budget)
+            sync_stream(store, deps.notes, slug, tag=deps.note_tag)  # project synthesis back
+            summary["synthesized"].append(slug)
+
     summary["reminders"] = sync_all_reminders(store, deps.reminders, deps.reminders_list)
     if deps.messages is not None:
         summary["imessage"] = poll_inbound(store, deps.messages)
@@ -90,7 +111,7 @@ def run_poll_tick(store: Store, deps: Deps) -> dict:
 def run_scheduled_pass(store: Store, deps: Deps) -> dict:
     """A full pass: ingest latest input, run the two-layer agent, project the
     refreshed synthesis back to notes, nudge the digest, and record health."""
-    tick = run_poll_tick(store, deps)
+    tick = run_poll_tick(store, deps, synthesize=False)  # run_cycle below synthesizes
     stream_results, overseer = run_cycle(store, deps.llm, deps.budget)
 
     # project the refreshed agent synthesis back into the notes

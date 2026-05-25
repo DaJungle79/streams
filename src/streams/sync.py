@@ -46,8 +46,8 @@ def _snapshot_path(store: Store, slug: str) -> Path:
     return _render_dir(store) / f"{slug}.json"
 
 
-def save_snapshot(store: Store, slug: str, doc: NoteDocument) -> None:
-    payload = {
+def _doc_payload(doc: NoteDocument) -> dict:
+    return {
         "title": doc.title,
         "zones": [
             {
@@ -60,6 +60,10 @@ def save_snapshot(store: Store, slug: str, doc: NoteDocument) -> None:
             for z in doc.zones
         ],
     }
+
+
+def save_snapshot(store: Store, slug: str, doc: NoteDocument) -> None:
+    payload = _doc_payload(doc)
     _snapshot_path(store, slug).write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
@@ -95,14 +99,16 @@ def sync_stream(store: Store, bridge: NotesBridge, slug: str, tag: str | None = 
 
     current = bridge.read_note(stream.note_id)
     # base carries ids; fall back to a fresh render if the snapshot was lost.
-    base = load_snapshot(store, slug) or render(store, slug, tag=tag)
+    snapshot = load_snapshot(store, slug)
+    base = snapshot or render(store, slug, tag=tag)
     changes = reconcile(store, slug, base, current)
 
-    # Re-render from the (now updated) store and write back, refreshing the
-    # snapshot. Skip the write when nothing changed and we already had a
-    # snapshot, to avoid churning the note's modification date.
-    if changes or load_snapshot(store, slug) is None:
-        doc = render(store, slug, tag=tag)
+    # Re-render from the (now updated) store and write back when the output
+    # actually differs from what the note last showed — this covers user edits
+    # *and* fresh agent synthesis written to agent.md since the last sync. Skip
+    # the write when render == snapshot, to avoid churning the modification date.
+    doc = render(store, slug, tag=tag)
+    if snapshot is None or _doc_payload(doc) != _doc_payload(snapshot):
         bridge.write_note(stream.note_id, doc)
         save_snapshot(store, slug, doc)
 
