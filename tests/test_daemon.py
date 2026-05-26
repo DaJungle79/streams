@@ -7,9 +7,9 @@ import pytest
 from streams.agent.llm import FakeLLM
 from streams.core import TodoStatus
 from streams.daemon import Deps, health_check, launchd_plist, run_poll_tick, run_scheduled_pass
-from streams.messages import FakeMessages
-from streams.notes_bridge import FakeNotesBridge
-from streams.reminders import FakeReminders
+from streams.apple.messages import FakeMessages
+from streams.apple.notes_bridge import FakeNotesBridge
+from streams.apple.reminders import FakeReminders
 from streams.store import Store
 
 DUE = date.today() + timedelta(days=2)

@@ -3,7 +3,7 @@
 import pytest
 
 from streams.core import EventSource
-from streams.messages import FakeMessages, ask, poll_inbound, send
+from streams.apple.messages import FakeMessages, ask, poll_inbound, send
 from streams.store import Store
 
 

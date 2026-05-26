@@ -8,9 +8,9 @@ read-only tail of recent events for reference. Agent-created goals/todos get the
 
 from __future__ import annotations
 
-from .core import GoalStatus, Provenance, TodoStatus
+from ..core import GoalStatus, Provenance, TodoStatus
 from .notedoc import NoteDocument, NoteLine, make_zone
-from .store import Store
+from ..store import Store
 
 _AGENT_PLACEHOLDER = "_(synthesis appears here after the next agent pass)_"
 _RECENT_EVENT_COUNT = 5

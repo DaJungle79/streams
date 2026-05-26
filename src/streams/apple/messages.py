@@ -22,8 +22,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from .core import EventSource, EventType, StreamState, new_id
-from .store import Store, StreamNotFound
+from ..core import EventSource, EventType, StreamState, new_id
+from ..store import Store, StreamNotFound
 
 
 @dataclass

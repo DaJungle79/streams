@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import pytest
 
 from streams.core import StreamState, TodoStatus
-from streams.reminders import FakeReminders, sync_all_reminders, sync_reminders
+from streams.apple.reminders import FakeReminders, sync_all_reminders, sync_reminders
 from streams.store import Store
 
 DUE = date.today() + timedelta(days=3)

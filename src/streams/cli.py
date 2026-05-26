@@ -16,8 +16,8 @@ from pathlib import Path
 from .config import Config
 from .core import EventSource, EventType, GoalStatus, Provenance, StreamState
 from .index import build_index
-from .notedoc import serialize_text
-from .render import render
+from .notes.notedoc import serialize_text
+from .notes.render import render
 from .store import Store, StreamNotFound
 
 
@@ -56,7 +56,7 @@ def cmd_stream_create(store: Store, args) -> int:
     )
     print(stream.id)
     if args.note:  # opt-in: also create the Apple Note now (needs a Mac + permissions)
-        from .notes_bridge import AppleNotesBridge
+        from .apple.notes_bridge import AppleNotesBridge
         from .sync import sync_stream
 
         cfg = _load_config(args)
@@ -189,7 +189,7 @@ def cmd_note_preview(store: Store, args) -> int:
 
 def cmd_sync(store: Store, args) -> int:
     # imported lazily so non-sync CLI use never touches Apple/osascript
-    from .notes_bridge import AppleNotesBridge
+    from .apple.notes_bridge import AppleNotesBridge
     from .sync import sync_stream
 
     cfg = _load_config(args)
@@ -365,7 +365,7 @@ def _imessage_error(exc: Exception) -> int:
 
 
 def cmd_capture(store: Store, args) -> int:
-    from .notes_bridge import AppleNotesBridge
+    from .apple.notes_bridge import AppleNotesBridge
     from .sync import capture_folder
 
     cfg = _load_config(args)

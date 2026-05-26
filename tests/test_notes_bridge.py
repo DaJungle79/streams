@@ -5,8 +5,8 @@ HTML path directly — where a <br>+</div> per blank line used to DOUBLE blank
 lines on every sync, growing a note without bound.
 """
 
-from streams.notedoc import NoteDocument, NoteLine, make_zone, parse_text
-from streams.notes_bridge import doc_to_html, html_to_text
+from streams.notes.notedoc import NoteDocument, NoteLine, make_zone, parse_text
+from streams.apple.notes_bridge import doc_to_html, html_to_text
 
 
 def _apple_reformat(html: str) -> str:

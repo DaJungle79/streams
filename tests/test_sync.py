@@ -3,9 +3,9 @@
 import pytest
 
 from streams.core import TodoStatus
-from streams.notes_bridge import FakeNotesBridge
+from streams.apple.notes_bridge import FakeNotesBridge
 from streams.store import Store
-from streams.sync import load_snapshot, sync_stream
+from streams.notes.sync import load_snapshot, sync_stream
 
 
 @pytest.fixture

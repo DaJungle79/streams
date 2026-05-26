@@ -1,7 +1,7 @@
 import pytest
 
 from streams.core import Provenance
-from streams.render import render
+from streams.notes.render import render
 from streams.store import Store
 
 

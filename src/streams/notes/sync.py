@@ -16,10 +16,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .notedoc import NoteDocument, NoteLine, Zone, make_zone
-from .notes_bridge import NoteGone, NotesBridge
+from ..apple.notes_bridge import NoteGone, NotesBridge
 from .reconcile import reconcile
 from .render import render
-from .store import Store
+from ..store import Store
 
 
 @dataclass

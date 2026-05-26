@@ -8,9 +8,9 @@ does) — so these tests exercise the same path production uses.
 import pytest
 
 from streams.core import GoalStatus, Provenance, TodoStatus
-from streams.notedoc import parse_text, serialize_text
-from streams.reconcile import reconcile
-from streams.render import render
+from streams.notes.notedoc import parse_text, serialize_text
+from streams.notes.reconcile import reconcile
+from streams.notes.render import render
 from streams.store import Store
 
 

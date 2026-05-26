@@ -17,8 +17,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Protocol
 
-from .core import StreamState, TodoStatus
-from .store import Store
+from ..core import StreamState, TodoStatus
+from ..store import Store
 
 META_SLUG = "meta"
 

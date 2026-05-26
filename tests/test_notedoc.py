@@ -1,4 +1,4 @@
-from streams.notedoc import (
+from streams.notes.notedoc import (
     NoteDocument,
     NoteLine,
     make_zone,

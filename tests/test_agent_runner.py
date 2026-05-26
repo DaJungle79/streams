@@ -11,7 +11,7 @@ from streams.agent.runner import (
     synthesize_stream,
 )
 from streams.core import EventSource, EventType, Provenance, StreamState
-from streams.render import render
+from streams.notes.render import render
 from streams.store import Store
 
 

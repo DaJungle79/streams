@@ -26,7 +26,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Protocol
 
-from .notedoc import NoteDocument, parse_text, serialize_text
+from ..notes.notedoc import NoteDocument, parse_text, serialize_text
 
 
 @contextmanager

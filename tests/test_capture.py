@@ -2,9 +2,9 @@
 
 import pytest
 
-from streams.notes_bridge import FakeNotesBridge
+from streams.apple.notes_bridge import FakeNotesBridge
 from streams.store import Store
-from streams.sync import capture_folder, sync_stream
+from streams.notes.sync import capture_folder, sync_stream
 
 FOLDER = "Streams"
 

@@ -20,9 +20,9 @@ from __future__ import annotations
 
 import difflib
 
-from .core import Provenance
+from ..core import Provenance
 from .notedoc import NoteDocument, NoteLine
-from .store import Store
+from ..store import Store
 
 
 def reconcile(store: Store, slug: str, base: NoteDocument, edited: NoteDocument) -> list[str]:
@@ -105,7 +105,7 @@ def _reconcile_goals(store, slug, base, edited) -> list[str]:
             store.set_goal_text(slug, bl.item_id, el.text)
             changes.append(f"goal edited: {el.text}")
         elif op == "remove":
-            from .core import GoalStatus
+            from ..core import GoalStatus
 
             store.set_goal_status(slug, bl.item_id, GoalStatus.dropped)
             changes.append(f"goal dropped: {bl.text}")

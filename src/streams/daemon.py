@@ -20,11 +20,11 @@ from .agent.llm import LLM
 from .agent.overseer import run_cycle
 from .agent.runner import ensure_meta, should_process, synthesize_stream
 from .core import EventSource, EventType
-from .messages import MessagesBridge, poll_inbound, send
-from .notes_bridge import NotesBridge
-from .reminders import RemindersBridge, sync_all_reminders
+from .apple.messages import MessagesBridge, poll_inbound, send
+from .apple.notes_bridge import NotesBridge
+from .apple.reminders import RemindersBridge, sync_all_reminders
 from .store import Store, StreamNotFound
-from .sync import capture_folder, sync_stream
+from .notes.sync import capture_folder, sync_stream
 
 META_SLUG = "meta"
 
@@ -260,9 +260,9 @@ def launchd_plist(label: str, program_args: list[str], working_dir: str, log_pat
 def build_deps(cfg) -> Deps:
     """Construct real bridges + LLM from config (lazy imports; needs a Mac + key)."""
     from .agent.llm import AnthropicLLM
-    from .messages import AppleMessages
-    from .notes_bridge import AppleNotesBridge
-    from .reminders import EventKitReminders
+    from .apple.messages import AppleMessages
+    from .apple.notes_bridge import AppleNotesBridge
+    from .apple.reminders import EventKitReminders
 
     return Deps(
         llm=AnthropicLLM(cfg.model_synthesis, api_key=cfg.anthropic_api_key or None),
