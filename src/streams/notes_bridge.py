@@ -17,13 +17,32 @@ if viable, native checkboxes are a later UX upgrade layered on this same model.
 from __future__ import annotations
 
 import html
+import os
 import re
 import subprocess
+import tempfile
 import textwrap
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Protocol
 
 from .notedoc import NoteDocument, parse_text, serialize_text
+
+
+@contextmanager
+def _html_tempfile(body: str):
+    """Write `body` to a temp file and yield its path. The note HTML can be large
+    (bigger than ARG_MAX), so it's passed to osascript by file path, never argv."""
+    fd, path = tempfile.mkstemp(prefix="streams-note-", suffix=".html")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(body)
+        yield path
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
 
 
 class NoteGone(Exception):
@@ -117,9 +136,19 @@ def doc_to_html(doc: NoteDocument) -> str:
 
 _TAG_RE = re.compile(r"<[^>]+>")
 _BLOCK_RE = re.compile(r"</(div|h1|h2|li|p)>|<br\s*/?>", re.IGNORECASE)
+# A <br> right before a block close is that block's only/last line break, not a
+# line of its own — e.g. a blank line is "<div><br></div>". Without this, each
+# such <br> adds an extra newline and blank lines DOUBLE on every round-trip.
+_BR_BEFORE_CLOSE_RE = re.compile(r"<br\s*/?>\s*(?=</(?:div|h1|h2|li|p)>)", re.IGNORECASE)
 
 
 def html_to_text(body: str) -> str:
+    # Apple pretty-prints stored HTML with literal newlines between tags
+    # (</div>\n<div>). Those are formatting, not content — line structure comes
+    # only from block tags and <br> — so drop them, else every line accretes an
+    # extra blank on each round-trip.
+    body = body.replace("\r", "").replace("\n", "")
+    body = _BR_BEFORE_CLOSE_RE.sub("", body)
     text = _BLOCK_RE.sub("\n", body)
     text = _TAG_RE.sub("", text)
     return html.unescape(text)
@@ -152,8 +181,9 @@ class AppleNotesBridge:
             """
             on run argv
                 set acctName to item 1 of argv
-                set noteBody to item 2 of argv
+                set bodyPath to item 2 of argv
                 set folderName to item 3 of argv
+                set noteBody to (read (POSIX file bodyPath) as «class utf8»)
                 tell application "Notes" to tell account acctName
                     if folderName is "" then
                         return id of (make new note with properties {body:noteBody})
@@ -168,7 +198,8 @@ class AppleNotesBridge:
             end run
             """
         )
-        return self._osa(script, self.account, doc_to_html(doc), folder or "")
+        with _html_tempfile(doc_to_html(doc)) as path:
+            return self._osa(script, self.account, path, folder or "")
 
     def read_note(self, note_id: str) -> NoteDocument:
         script = textwrap.dedent(
@@ -184,11 +215,15 @@ class AppleNotesBridge:
         script = textwrap.dedent(
             """
             on run argv
-                tell application "Notes" to set body of note id (item 1 of argv) to (item 2 of argv)
+                set noteId to item 1 of argv
+                set bodyPath to item 2 of argv
+                set noteBody to (read (POSIX file bodyPath) as «class utf8»)
+                tell application "Notes" to set body of note id noteId to noteBody
             end run
             """
         )
-        self._osa(script, note_id, doc_to_html(doc))
+        with _html_tempfile(doc_to_html(doc)) as path:
+            self._osa(script, note_id, path)
 
     def find_notes_in_folder(self, folder: str) -> list[NoteRef]:
         # List every note in `folder`. Folder membership is reliable via AppleScript

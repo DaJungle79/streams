@@ -73,6 +73,22 @@ def test_poll_tick_archives_deleted_note(store, deps):
     assert summary["synthesized"] == []                   # archived stream isn't synthesized
 
 
+def test_poll_tick_one_stream_failure_does_not_abort(store, deps):
+    store.create_stream("Good")
+
+    class FlakyNotes(FakeNotesBridge):
+        def create_note(self, title, doc, folder=None):
+            if title == "Trip":
+                raise RuntimeError("boom")
+            return super().create_note(title, doc, folder)
+
+    deps.notes = FlakyNotes()
+    summary = run_poll_tick(store, deps)
+
+    assert any(slug == "trip" for slug, _ in summary["errors"])  # the bad stream is recorded
+    assert store.read_stream("good").note_id                     # the other stream still synced
+
+
 def test_scheduled_pass_does_not_double_synthesize(store, deps):
     result = run_scheduled_pass(store, deps)
     # the pass's ingest tick must not synthesize — run_cycle does it once

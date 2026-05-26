@@ -81,11 +81,17 @@ def run_poll_tick(store: Store, deps: Deps, synthesize: bool = True) -> dict:
 
     ``synthesize=False`` does ingest only — used by the scheduled pass, which runs
     a full ``run_cycle`` right after and would otherwise synthesize twice."""
-    summary: dict = {"captured": [], "notes_synced": 0, "synthesized": [], "archived": []}
+    log = logging.getLogger("streams.daemon")
+    summary: dict = {"captured": [], "notes_synced": 0, "synthesized": [], "archived": [], "errors": []}
     summary["captured"] = capture_folder(store, deps.notes, deps.note_folder)
     dirty: set[str] = set(summary["captured"])
     for stream in _syncable(store):
-        result = sync_stream(store, deps.notes, stream.id, folder=deps.note_folder)
+        try:
+            result = sync_stream(store, deps.notes, stream.id, folder=deps.note_folder)
+        except Exception as exc:  # noqa: BLE001 — one stream must not abort the whole tick
+            log.exception("sync failed for %s", stream.id)
+            summary["errors"].append((stream.id, str(exc)))
+            continue
         if result.archived:
             summary["archived"].append(stream.id)  # note was deleted -> stream archived
         elif result.created or result.changes:
@@ -96,13 +102,16 @@ def run_poll_tick(store: Store, deps: Deps, synthesize: bool = True) -> dict:
         for slug in sorted(dirty):
             try:
                 stream = store.read_stream(slug)
+                if not should_process(store, stream):
+                    continue
+                synthesize_stream(store, deps.llm, slug, deps.budget)
+                sync_stream(store, deps.notes, slug, folder=deps.note_folder)  # project synthesis back
+                summary["synthesized"].append(slug)
             except StreamNotFound:
                 continue
-            if not should_process(store, stream):
-                continue
-            synthesize_stream(store, deps.llm, slug, deps.budget)
-            sync_stream(store, deps.notes, slug, folder=deps.note_folder)  # project synthesis back
-            summary["synthesized"].append(slug)
+            except Exception as exc:  # noqa: BLE001 — one stream must not abort the whole tick
+                log.exception("synthesis failed for %s", slug)
+                summary["errors"].append((slug, str(exc)))
 
     summary["reminders"] = sync_all_reminders(store, deps.reminders, deps.reminders_list)
     if deps.messages is not None:
