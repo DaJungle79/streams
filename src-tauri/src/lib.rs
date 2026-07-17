@@ -1,3 +1,4 @@
+mod backup;
 mod config;
 mod reminders;
 mod storage;
@@ -53,6 +54,11 @@ pub fn run() {
             config::set_store_root,
             config::get_mirror_enabled,
             config::set_mirror_enabled,
+            backup::backup_default_dir,
+            backup::backup_write,
+            backup::backup_list,
+            backup::backup_read,
+            backup::backup_prune,
             config::read_reminder_map,
             config::write_reminder_map,
             reminders::reminders_create,

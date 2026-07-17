@@ -13,9 +13,11 @@ import { SettingsView } from "./views/Settings/SettingsView";
 import { StreamList } from "./views/StreamList/StreamList";
 import { WaitingView } from "./views/Waiting/WaitingView";
 import { digestDue, notifyDigest, notifyEvents } from "./services/notifications";
+import { backupIfChanged } from "./services/backup";
 import { reconcile } from "./services/remindersMirror";
 import { Area } from "./models/area";
 import { Stream } from "./models/stream";
+import { Settings } from "./models/settings";
 import { toDay } from "./core/days";
 import { useStore } from "./storage/useStore";
 import "./styles.css";
@@ -102,6 +104,7 @@ export default function App() {
     <div className={wide ? "app app-wide" : "app"}>
       <AmbientSync items={items} digestTime={store.settings.digestTime} now={now} />
       <ReminderSync streams={store.streams} areas={store.areas} />
+      <BackupSync streams={store.streams} areas={store.areas} settings={store.settings} />
       <Sidebar
         areas={store.areas}
         streams={store.streams}
@@ -278,6 +281,34 @@ function ReminderSync({ streams, areas }: { streams: Stream[]; areas: Area[] }) 
     }, 2500);
     return () => clearTimeout(t);
   }, [streams, areas]);
+
+  return null;
+}
+
+/**
+ * Snapshots the store shortly after it settles.
+ *
+ * Debounced well past the 400ms save debounce, so a burst of typing produces one
+ * snapshot rather than twenty. Deduped by fingerprint inside backupIfChanged, so
+ * an idle week costs nothing.
+ */
+function BackupSync({
+  streams,
+  areas,
+  settings,
+}: {
+  streams: Stream[];
+  areas: Area[];
+  settings: Settings;
+}) {
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void backupIfChanged(streams, areas, settings).then((r) => {
+        if (r.status === "error") console.error("backup failed:", r.error);
+      });
+    }, 30_000);
+    return () => clearTimeout(t);
+  }, [streams, areas, settings]);
 
   return null;
 }

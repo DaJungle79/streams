@@ -1,6 +1,7 @@
 import { Area } from "../../models/area";
 import { Settings } from "../../models/settings";
 import { Stream } from "../../models/stream";
+import { Backups } from "./Backups";
 import { RemindersMirror } from "./RemindersMirror";
 import { LoginItem } from "./LoginItem";
 import { StoreFolder } from "./StoreFolder";
@@ -65,6 +66,11 @@ export function SettingsView({ settings, streams, areas, onChange }: Props) {
       <section className="att-group set-group">
         <h2 className="att-group-title">Store</h2>
         <StoreFolder />
+      </section>
+
+      <section className="att-group set-group">
+        <h2 className="att-group-title">Backups</h2>
+        <Backups streams={streams} areas={areas} settings={settings} />
       </section>
 
       <section className="att-group set-group">
