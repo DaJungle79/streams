@@ -7,10 +7,18 @@ Companion to `SPEC.md`. Defines project structure, build order, and what "done" 
 - [x] **Xcode Command Line Tools** — already present at `/Library/Developer/CommandLineTools`. The only Apple dependency; no App Store, no account.
 - [x] **Rust toolchain** — rustup 1.29.0, Rust 1.97.1. Installed with `--no-modify-path`, so **cargo is not on your PATH**: add `. "$HOME/.cargo/env"` to your shell profile, or source it per-shell. (An orphaned `~/.rustup` from June 2025 was left behind by an earlier install whose `~/.cargo` had been deleted; rustup adopted and updated it, 1.87 → 1.97.1.)
 - [x] **Node** — v24.7.0, npm 11.5.1.
-- [ ] **A sync folder**, decided before M1 because the storage path is configuration, not code. Syncthing is the recommendation: it syncs on file close, has no eviction behaviour, and keeps conflicted copies with a clear naming pattern. iCloud Drive is the riskiest of the three (eviction + partial materialization) — supported, not advised.
-- [ ] `git init` in this directory at M1.
+- [x] **A sync folder** — Syncthing 2.1.2, store at `~/Streams`, folder id `streams`, `/.tmp` ignored. Chosen over iCloud Drive and OneDrive because it never uses placeholders: always full local copies. That matters more than it sounds — see below.
+- [x] `git init` — done at M1; remote `DaJungle79/streams`.
 
 **No longer needed:** Xcode itself, an Apple Developer account ($99/yr), notarization, CloudKit dev/prod schema deployment.
+
+### Why not iCloud Drive for the store
+
+Not a preference — a specific failure. When iCloud evicts a file it replaces it with a hidden `.name.icloud` placeholder and **the original filename disappears from the directory listing**. `read_all_streams` would return zero streams and the app would open showing an empty store. `Optimize Mac Storage` is on for this user, so the mechanism is armed, not hypothetical. OneDrive's Files On-Demand has the same shape. Syncthing has no placeholder concept at all.
+
+The inversion worth remembering: **eviction is fatal for a live store and harmless for a backup**, because a backup is cold by definition. Same property, opposite conclusions — which is why snapshots go to iCloud (`backup.rs`) and the store does not.
+
+`~/Streams` is deliberately *not* under `~/Documents`: Desktop & Documents iCloud sync is on for this user, and two sync engines fighting over the same files is a corruption story with no upside.
 
 ## M0 — Signing & permissions spike ✅ DONE
 
