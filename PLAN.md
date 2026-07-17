@@ -179,10 +179,19 @@ Guided full-screen flow, progress, skip, resume, and the ">25% overdue"/weekly n
 - **The nudge is dismissed by acting, not by an X.** A banner you can wave away is one you stop seeing.
 - **"More than 25%" is literal** — exactly 25% doesn't fire — and 0 active streams is not 100% overdue. An empty app must never nag.
 
-### M5 — macOS surface
-Tray icon with attention count via `set_title` and top-5 dropdown. Accessory activation policy + hide-on-close. Global hotkey quick capture with `>area` syntax. Notification scheduling per M0's outcome: milestone/window/wake-up alerts + the single daily digest. Launch-at-login via autostart plugin.
-**Done when:** the app is useful without ever opening the main window.
-**Size:** ~20%.
+### M5 — macOS surface ✅ DONE (needs on-device confirmation)
+Tray with count + top-5, accessory policy, hide-on-close, ⌥⌘S capture, notifications, launch-at-login.
+**Size:** ~20%. 205 tests (195 TS, 10 Rust).
+
+- **The tray count comes from the same array the view renders.** `AmbientSync` passes `attentionItems(...)` to both, so §4.1's "number of streams" cannot drift from what's on screen. The old PLAN risk about menu-bar badges is retired: `set_title` puts text beside the icon, which is a first-class API, not a workaround. Zero shows an **empty** title, never a grey "0" — §2's empty state is meant to feel like a reward.
+- **Notifications are keyed and remembered**, day-stamped in `localStorage`: one banner per event, ever. A tool that double-notifies gets its notifications switched off, and then §4.3 is worth nothing. Deliberately machine-local — two Macs each notifying you once is correct, since you're sitting at one of them; syncing it would let whichever Mac saw it first silence the other.
+- **Close hides, it never quits** (§4.4). The tray count and digest are computed in the webview, so killing it would silently stop the two features that make the app ambient. Quit is in the tray menu.
+- **`--autostart` distinguishes a login launch** from one you asked for, so §4.4's "main window stays closed" doesn't suppress the window when you open the app yourself.
+- **Capture never truncates a thought.** `>x` is only syntax if `x` resolves to a real area; otherwise the `>` was punctuation and the whole text is the title. Without that rule "revenue > costs" — an ordinary title — becomes "revenue". Since §4.2 defers triage anyway, the worst case is an unfiled stream, never a mangled one.
+
+Build fixes worth remembering: `tauri` needs `features = ["tray-icon"]` (not default), `Shortcut::new` isn't `const`, and `set_activation_policy` needs `&mut app` so it must precede `app.handle()`.
+
+**Not yet confirmed on device** (needs a human): the tray icon rendering and its count, ⌥⌘S summoning the panel, a notification actually appearing from this build, and the login-item round trip. M0 proved notifications *can* fire from an ad-hoc build; it did not prove this app's wiring is right.
 
 ### M6 — Sync + ship
 Point the storage path at the sync folder. Conflict detection and merge (SPEC §6) with tests covering: concurrent scalar edits, concurrent log appends, and an edit-vs-delete race. Verify on two Macs. App icon, Settings polish, `tauri build`, drag to `/Applications`.

@@ -1,5 +1,7 @@
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
-import { AttentionOptions, attentionCount } from "./core/attentionEngine";
+import { AttentionItem, AttentionOptions, attentionItems } from "./core/attentionEngine";
 import { shouldSuggestReview } from "./core/review";
 import { waitingByPerson } from "./core/waiting";
 import { ArchiveView } from "./views/Archive/ArchiveView";
@@ -9,6 +11,8 @@ import { StreamDetail } from "./views/StreamDetail/StreamDetail";
 import { ReviewView } from "./views/Review/ReviewView";
 import { StreamList } from "./views/StreamList/StreamList";
 import { WaitingView } from "./views/Waiting/WaitingView";
+import { digestDue, notifyDigest, notifyEvents } from "./services/notifications";
+import { toDay } from "./core/days";
 import { useStore } from "./storage/useStore";
 import "./styles.css";
 
@@ -31,6 +35,15 @@ export default function App() {
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(t);
+  }, []);
+
+  // Tray routing: a click in the menu bar opens that stream (§4.1).
+  useEffect(() => {
+    const un = listen<string>("tray:open-stream", (e) => {
+      setStreamId(e.payload);
+      setScreen("list");
+    });
+    return () => void un.then((f) => f());
   }, []);
 
   const selected = store.streams.find((s) => s.id === streamId) ?? null;
@@ -68,6 +81,7 @@ export default function App() {
     void store.createStream(title, target).then((s) => setStreamId(s.id));
   };
 
+  const items = attentionItems(store.streams, now, opts);
   const suggestion = shouldSuggestReview(store.streams, now, store.settings.lastReviewAt, opts);
   const reviewing = store.settings.activeReviewStartedAt !== null;
 
@@ -82,6 +96,7 @@ export default function App() {
 
   return (
     <div className={wide ? "app app-wide" : "app"}>
+      <AmbientSync items={items} digestTime={store.settings.digestTime} now={now} />
       <Sidebar
         areas={store.areas}
         streams={store.streams}
@@ -93,7 +108,7 @@ export default function App() {
         onCreateArea={(n, c) => void store.createArea(n, c)}
         screen={screen}
         onGoTo={(t) => (t === "review" && !reviewing ? beginReview() : setScreen(t))}
-        attentionCount={attentionCount(store.streams, now, opts)}
+        attentionCount={items.length}
         waitingCount={waitingByPerson(store.streams, now).length}
       />
 
@@ -194,6 +209,44 @@ export default function App() {
       )}
     </div>
   );
+}
+
+/**
+ * The ambient half of the app (SPEC §4.1, §4.3): keep the tray in step with the
+ * attention set, and fire notifications.
+ *
+ * A component rather than an effect in App because `items` is computed after
+ * App's early returns, and hooks can't live there. It renders nothing.
+ */
+function AmbientSync({
+  items,
+  digestTime,
+  now,
+}: {
+  items: AttentionItem[];
+  digestTime: string;
+  now: Date;
+}) {
+  // The tray count comes from the same array the view renders, so §4.1's
+  // "number of streams" can never disagree with what's on screen.
+  useEffect(() => {
+    void invoke("update_tray", {
+      count: items.length,
+      items: items.slice(0, 5).map((i) => ({
+        id: i.stream.id,
+        title: i.stream.title,
+        detail: i.detail,
+      })),
+    }).catch((e) => console.error("tray update failed", e));
+  }, [items]);
+
+  useEffect(() => {
+    const today = toDay(now);
+    void notifyEvents(items, today);
+    if (digestDue(now, digestTime)) void notifyDigest(items, today);
+  }, [items, now, digestTime]);
+
+  return null;
 }
 
 function peopleOf(streams: ReturnType<typeof useStore>["streams"]): string[] {

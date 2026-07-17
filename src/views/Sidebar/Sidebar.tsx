@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Area } from "../../models/area";
 import { Stream } from "../../models/stream";
 import type { Screen } from "../../App";
+import { LoginItem } from "../Settings/LoginItem";
 
 const PALETTE = ["#6b7fd7", "#d78b6b", "#6bd79b", "#d76b9b", "#b06bd7", "#d7c76b"];
 
@@ -109,6 +110,11 @@ export function Sidebar({
           + Add area
         </button>
       )}
+
+      <div className="sidebar-foot">
+        <LoginItem />
+        <p className="sidebar-hint">⌥⌘S to capture</p>
+      </div>
     </nav>
   );
 }

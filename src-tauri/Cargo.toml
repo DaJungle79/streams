@@ -18,10 +18,14 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# tray-icon: SPEC §4.1's menu-bar presence is not in Tauri's default feature set.
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3.27.0"
 notify = "8.2.0"
+tauri-plugin-notification = "2.3.3"
+tauri-plugin-global-shortcut = "2.3.2"
+tauri-plugin-autostart = "2.5.1"
 

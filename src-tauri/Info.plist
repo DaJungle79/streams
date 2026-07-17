@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- SPEC §4.5: the Reminders mirror shells out to osascript (M7). Present
+	     from M5 so the TCC prompt is wired before the feature needs it. -->
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Streams mirrors your next steps into a dedicated Reminders list.</string>
+</dict>
+</plist>

@@ -12,9 +12,26 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Streams",
-        "width": 800,
-        "height": 600
+        "width": 1100,
+        "height": 760,
+        "minWidth": 820,
+        "minHeight": 520,
+        "visible": true
+      },
+      {
+        "label": "capture",
+        "title": "Quick capture",
+        "width": 560,
+        "height": 78,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "center": true,
+        "skipTaskbar": true
       }
     ],
     "security": {

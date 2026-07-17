@@ -414,3 +414,38 @@ fieldset > input { width: 100%; }
   margin-top: 24px;
 }
 .review-finish { margin-top: 12px; }
+
+/* Quick capture (SPEC §4.2) */
+.capture {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 100vh;
+  padding: 0 14px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  backdrop-filter: blur(20px);
+}
+.capture-input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  font-size: 17px;
+  padding: 0;
+}
+.capture-input:focus { outline: 0; }
+.capture-area, .capture-flash {
+  flex: none;
+  font-size: 12px;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.capture-area { border: 1px solid var(--line); color: var(--muted); }
+.capture-flash { background: var(--accent); color: #fff; }
+
+.sidebar-foot { margin-top: auto; padding-top: 16px; }
+.sidebar { display: flex; flex-direction: column; }
+.sidebar-hint { color: var(--muted); font-size: 11px; margin: 8px 0 0; padding: 0 8px; }
+.loginitem { padding: 0 4px; }
+.loginitem .chip { font-size: 11px; }
