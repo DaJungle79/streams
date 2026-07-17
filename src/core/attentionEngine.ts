@@ -36,11 +36,18 @@ export type AttentionOptions = {
   waitingThresholdDays: number;
   /** SPEC §2.3: milestone "within 7 days". */
   milestoneHorizonDays: number;
+  /**
+   * Cadence for streams that don't set their own. This is what makes §8's
+   * "every stream is always covered" true -- see `Settings`. Null disables the
+   * net globally, which is a choice; the old behaviour was an accident.
+   */
+  defaultCheckInCadenceDays: number | null;
 };
 
 export const DEFAULT_OPTIONS: AttentionOptions = {
   waitingThresholdDays: 7,
   milestoneHorizonDays: 7,
+  defaultCheckInCadenceDays: 30,
 };
 
 /** Display order, straight from SPEC §2's own numbering. */
@@ -148,10 +155,12 @@ function reasonsFor(stream: Stream, today: IsoDay, opts: AttentionOptions): Atte
     }
   }
 
-  // §2.2 — cadence elapsed since last touch.
-  if (stream.checkInCadenceDays !== null) {
+  // §2.2 — cadence elapsed since last touch. A stream's own cadence wins;
+  // otherwise it inherits the default, which is what keeps §8's promise true.
+  const cadence = stream.checkInCadenceDays ?? opts.defaultCheckInCadenceDays;
+  if (cadence !== null) {
     const since = daysSince(stream.lastTouched, today);
-    const over = since - stream.checkInCadenceDays;
+    const over = since - cadence;
     if (over > 0) {
       push("check-in-overdue", `check-in ${plural(over, "day")} overdue`, over);
     }

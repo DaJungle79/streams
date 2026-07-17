@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { addDays, toDay } from "../core/days";
+import { structuralEvents } from "../core/events";
+import { withState } from "../core/transitions";
 import { Area, newArea } from "../models/area";
+import { DEFAULT_SETTINGS, Settings } from "../models/settings";
 import { LogEntryKind, newLogEntry } from "../models/logEntry";
 import { Stream, touch } from "../models/stream";
 import {
@@ -25,6 +28,7 @@ export type Store = {
   invalid: InvalidFile[];
   streams: Stream[];
   areas: Area[];
+  settings: Settings;
   createStream: (title: string, areaId: string) => Promise<Stream>;
   /** Applies an edit, stamps lastTouched, persists (debounced). */
   updateStream: (id: string, edit: (s: Stream) => Stream) => void;
@@ -34,6 +38,8 @@ export type Store = {
   completeStep: (id: string) => void;
   checkIn: (id: string) => void;
   snooze: (id: string, days: number) => void;
+  nudge: (id: string) => void;
+  reactivate: (id: string) => void;
 };
 
 export function useStore(): Store {
@@ -42,6 +48,7 @@ export function useStore(): Store {
   const [invalid, setInvalid] = useState<InvalidFile[]>([]);
   const [streams, setStreams] = useState<Stream[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,6 +64,7 @@ export function useStore(): Store {
         }
         setStreams(res.streams);
         setAreas(seeded);
+        setSettings(res.settings);
         setInvalid(res.invalid);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
@@ -81,9 +89,22 @@ export function useStore(): Store {
     };
   }, []);
 
+  /**
+   * The single write path. Applies the edit, appends any structural log entries
+   * the change implies (§3.3), stamps lastTouched, and persists.
+   *
+   * Everything mutating goes through here so the log can't depend on which
+   * screen made the change.
+   */
   const updateStream = useCallback((id: string, edit: (s: Stream) => Stream) => {
     setStreams((prev) => {
-      const next = prev.map((s) => (s.id === id ? touch(edit(s), new Date()) : s));
+      const now = new Date();
+      const next = prev.map((s) => {
+        if (s.id !== id) return s;
+        const edited = edit(s);
+        const events = structuralEvents(s, edited, now);
+        return touch(events.length ? { ...edited, log: [...events, ...edited.log] } : edited, now);
+      });
       const changed = next.find((s) => s.id === id);
       if (changed) saveStream(changed);
       return next;
@@ -110,14 +131,9 @@ export function useStore(): Store {
    */
   const completeStep = useCallback(
     (id: string) => {
-      updateStream(id, (s) => {
-        if (!s.nextStep) return s;
-        return {
-          ...s,
-          nextStep: null,
-          log: [newLogEntry("step-completed", s.nextStep.text, new Date()), ...s.log],
-        };
-      });
+      // No bespoke entry here: clearing the step makes structuralEvents log
+      // "step-completed" itself. Adding one too would double-log.
+      updateStream(id, (s) => (s.nextStep ? { ...s, nextStep: null } : s));
     },
     [updateStream],
   );
@@ -150,6 +166,35 @@ export function useStore(): Store {
     [updateStream],
   );
 
+  /**
+   * §3.1: "'Nudge sent' action stamps the log and resets the waiting timer."
+   *
+   * Resetting `waitingSince` is the point: you've done your part, so the §2.4
+   * clock restarts from the nudge rather than continuing to shout about a wait
+   * you've already acted on. The log keeps the real history.
+   */
+  const nudge = useCallback(
+    (id: string) => {
+      updateStream(id, (s) => {
+        const who = s.nextStep?.owner.kind === "person" ? s.nextStep.owner.name : "someone";
+        return {
+          ...s,
+          waitingSince: toDay(new Date()),
+          log: [newLogEntry("nudge-sent", `nudged ${who}`, new Date()), ...s.log],
+        };
+      });
+    },
+    [updateStream],
+  );
+
+  /** §5.2: streams can be reactivated from the archive. */
+  const reactivate = useCallback(
+    (id: string) => {
+      updateStream(id, (s) => withState(s, "active", new Date()));
+    },
+    [updateStream],
+  );
+
   const createStream = useCallback(async (title: string, areaId: string) => {
     const { newStream } = await import("../models/stream");
     const s = newStream(title, areaId, new Date());
@@ -178,6 +223,7 @@ export function useStore(): Store {
     invalid,
     streams,
     areas,
+    settings,
     createStream,
     updateStream,
     removeStream,
@@ -186,5 +232,7 @@ export function useStore(): Store {
     completeStep,
     checkIn,
     snooze,
+    nudge,
+    reactivate,
   };
 }

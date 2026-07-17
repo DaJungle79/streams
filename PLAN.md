@@ -154,10 +154,19 @@ Reachable through the M1 UI today (cadence is optional and defaults to none). Pi
 2. **A stale-next-step trigger** — `nextStep.setAt` is already stored; fire when a step has gone untouched for N days. Catches the real failure (a step nobody's moved) rather than proxying it through "you haven't looked".
 3. **Make cadence mandatory** — simplest, but forces a number onto every idea you jot down.
 
-### M3 — Oversight mechanics
-Waiting view grouped by person with "nudge sent". Log timeline with automatic entries for structural events. Check-in actions and cadence editing. Archive with reactivation. Priority pinning everywhere.
-**Done when:** SPEC §3.1–3.3 and §5.2–5.3 fully behave; any touch counts as a check-in.
-**Size:** ~20%.
+### M3 — Oversight mechanics ✅ DONE
+Waiting view grouped by person with "nudge sent". Automatic log entries for structural events. Archive with reactivation. Name autocomplete. Settings file.
+**Size:** ~20%. 161 tests (151 TS, 10 Rust).
+
+**§8's gap is closed.** `checkInCadenceDays: null` now means **inherit `settings.defaultCheckInCadenceDays`** (30) rather than "no cadence", so every live stream is covered by something without the user having to remember. Setting the global to null reopens the hole — allowed, but now a deliberate choice rather than an accident. A test sweeps every stream shape reachable through the UI and asserts each one trips a trigger; the one legitimate silence is a parked stream sleeping toward a future wake-up, which is a promise to resurface, not rot.
+
+Decisions:
+
+- **`structuralEvents(before, after)` is a pure diff**, so the log can't drift depending on which screen made the change, and `updateStream` is the single write path that applies it.
+- **The log is deliberately narrow.** State, step text, owner, and deadline *label* changes are logged. Renaming the stream, retyping the outcome, or nudging a cadence are not — the log's whole value is that everything in it is worth reading, and §8's one-minute context reload dies under bookkeeping noise.
+- **Deadline changes log the label, not the window.** "end of Q3 2026 → mid October" is the decision; `2026-10-11` is the parser's arithmetic. A window that moves under an unchanged label logs nothing — the user decided nothing.
+- **Waiting groups by person, not stream**, because chasing Bob about four things is one conversation. People sort by longest wait: the oldest is likeliest to have been quietly dropped.
+- **"Nudge sent" resets `waitingSince`.** You've acted, so §2.4's clock restarts; the log keeps the real history.
 
 ### M4 — Weekly review mode
 Guided full-screen flow (relevant? → step right? → owner right?), progress, skip/resume, review-counts-as-check-in, and the ">25% overdue" nudge.

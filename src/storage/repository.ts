@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { Area, AreasFile } from "../models/area";
+import { DEFAULT_SETTINGS, Settings } from "../models/settings";
 import { Stream } from "../models/stream";
 
 /**
@@ -19,6 +20,7 @@ export type InvalidFile = { name: string; error: string };
 export type LoadResult = {
   streams: Stream[];
   areas: Area[];
+  settings: Settings;
   /**
    * Files that exist but did not parse. Surfaced, never swallowed: a store that
    * silently drops a stream is the failure this app exists to prevent (SPEC §8).
@@ -65,7 +67,30 @@ export async function loadAll(): Promise<LoadResult> {
     }
   }
 
-  return { streams, areas, invalid };
+  let settings = DEFAULT_SETTINGS;
+  const settingsRaw = await invoke<string | null>("read_root_file", {
+    root,
+    name: "settings.json",
+  });
+  if (settingsRaw !== null) {
+    try {
+      settings = Settings.parse(JSON.parse(settingsRaw));
+    } catch (e) {
+      // Fall back to defaults rather than refuse to boot. Unlike a stream, a
+      // broken settings file costs a preference, not data -- but say so.
+      invalid.push({ name: "settings.json", error: describe(e) });
+    }
+  }
+
+  return { streams, areas, settings, invalid };
+}
+
+export async function saveSettingsNow(settings: Settings): Promise<void> {
+  await invoke("write_root_file", {
+    root: await storeRoot(),
+    name: "settings.json",
+    contents: JSON.stringify(Settings.parse(settings), null, 2),
+  });
 }
 
 export async function saveStreamNow(stream: Stream): Promise<void> {

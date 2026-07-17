@@ -1,18 +1,21 @@
 import { useEffect, useState } from "react";
-import { attentionCount } from "./core/attentionEngine";
+import { AttentionOptions, attentionCount } from "./core/attentionEngine";
+import { waitingByPerson } from "./core/waiting";
+import { ArchiveView } from "./views/Archive/ArchiveView";
 import { AttentionView } from "./views/Attention/AttentionView";
 import { Sidebar } from "./views/Sidebar/Sidebar";
 import { StreamDetail } from "./views/StreamDetail/StreamDetail";
 import { StreamList } from "./views/StreamList/StreamList";
+import { WaitingView } from "./views/Waiting/WaitingView";
 import { useStore } from "./storage/useStore";
 import "./styles.css";
 
 /**
  * SPEC's guiding principle: "The attention view is the app; the list is just the
- * database." So Attention is the launch screen and the list is somewhere you go,
- * not the default.
+ * database." So Attention is the launch screen and everything else is somewhere
+ * you go, not the default.
  */
-type Screen = "attention" | "list";
+export type Screen = "attention" | "waiting" | "archive" | "list";
 
 export default function App() {
   const store = useStore();
@@ -20,8 +23,8 @@ export default function App() {
   const [areaId, setAreaId] = useState<string | null>(null);
   const [streamId, setStreamId] = useState<string | null>(null);
 
-  // Re-evaluated on every render; `now` only needs to be fresh enough that a
-  // date rolling over eventually shows up. A long-lived window ticks it here.
+  // A long-lived window must notice the date rolling over, or a wake-up set for
+  // tomorrow never fires until you restart the app.
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60_000);
@@ -44,6 +47,14 @@ export default function App() {
     );
   }
 
+  // Settings drive the engine, so the §8 safety net and the §2.4 threshold are
+  // one file away from being tuned — not recompiled.
+  const opts: AttentionOptions = {
+    waitingThresholdDays: store.settings.waitingThresholdDays,
+    milestoneHorizonDays: store.settings.milestoneHorizonDays,
+    defaultCheckInCadenceDays: store.settings.defaultCheckInCadenceDays,
+  };
+
   const open = (id: string) => {
     setStreamId(id);
     setScreen("list");
@@ -55,10 +66,10 @@ export default function App() {
     void store.createStream(title, target).then((s) => setStreamId(s.id));
   };
 
-  const count = attentionCount(store.streams, now);
+  const wide = screen !== "list";
 
   return (
-    <div className={screen === "attention" ? "app app-attention" : "app"}>
+    <div className={wide ? "app app-wide" : "app"}>
       <Sidebar
         areas={store.areas}
         streams={store.streams}
@@ -69,24 +80,12 @@ export default function App() {
         }}
         onCreateArea={(n, c) => void store.createArea(n, c)}
         screen={screen}
-        attentionCount={count}
-        onShowAttention={() => setScreen("attention")}
+        onGoTo={setScreen}
+        attentionCount={attentionCount(store.streams, now, opts)}
+        waitingCount={waitingByPerson(store.streams, now).length}
       />
 
-      {screen === "attention" ? (
-        <main className="pane pane-wide">
-          <InvalidBanner store={store} />
-          <AttentionView
-            streams={store.streams}
-            areas={store.areas}
-            now={now}
-            onOpen={open}
-            onCompleteStep={store.completeStep}
-            onCheckIn={store.checkIn}
-            onSnooze={store.snooze}
-          />
-        </main>
-      ) : (
+      {screen === "list" ? (
         <>
           <StreamList
             streams={store.streams}
@@ -102,6 +101,7 @@ export default function App() {
               <StreamDetail
                 stream={selected}
                 areas={store.areas}
+                knownPeople={peopleOf(store.streams)}
                 onUpdate={store.updateStream}
                 onAppendLog={store.appendLog}
                 onDelete={(id) => void store.removeStream(id)}
@@ -111,9 +111,50 @@ export default function App() {
             )}
           </main>
         </>
+      ) : (
+        <main className="pane pane-wide">
+          <InvalidBanner store={store} />
+          {screen === "attention" && (
+            <AttentionView
+              streams={store.streams}
+              areas={store.areas}
+              now={now}
+              opts={opts}
+              onOpen={open}
+              onCompleteStep={store.completeStep}
+              onCheckIn={store.checkIn}
+              onSnooze={store.snooze}
+            />
+          )}
+          {screen === "waiting" && (
+            <WaitingView
+              streams={store.streams}
+              areas={store.areas}
+              now={now}
+              waitingThresholdDays={opts.waitingThresholdDays}
+              onOpen={open}
+              onNudge={store.nudge}
+            />
+          )}
+          {screen === "archive" && (
+            <ArchiveView
+              streams={store.streams}
+              areas={store.areas}
+              selectedAreaId={areaId}
+              onOpen={open}
+              onReactivate={store.reactivate}
+            />
+          )}
+        </main>
       )}
     </div>
   );
+}
+
+function peopleOf(streams: ReturnType<typeof useStore>["streams"]): string[] {
+  const names = new Set<string>();
+  for (const s of streams) if (s.nextStep?.owner.kind === "person") names.add(s.nextStep.owner.name);
+  return [...names].sort((a, b) => a.localeCompare(b));
 }
 
 /**

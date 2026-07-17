@@ -8,6 +8,7 @@ import { Stream, StreamState } from "../../models/stream";
 type Props = {
   stream: Stream;
   areas: Area[];
+  knownPeople: string[];
   onUpdate: (id: string, edit: (s: Stream) => Stream) => void;
   onAppendLog: (id: string, kind: LogEntryKind, text: string) => void;
   onDelete: (id: string) => void;
@@ -85,7 +86,7 @@ function DeadlineField({
   );
 }
 
-export function StreamDetail({ stream, areas, onUpdate, onAppendLog, onDelete }: Props) {
+export function StreamDetail({ stream, areas, knownPeople, onUpdate, onAppendLog, onDelete }: Props) {
   const [note, setNote] = useState("");
   const set = (edit: (s: Stream) => Stream) => onUpdate(stream.id, edit);
 
@@ -232,6 +233,7 @@ export function StreamDetail({ stream, areas, onUpdate, onAppendLog, onDelete }:
               me
             </button>
             <input
+              list="known-people"
               placeholder="…or a person's name"
               value={stream.nextStep.owner.kind === "person" ? stream.nextStep.owner.name : ""}
               onChange={(e) =>
@@ -252,6 +254,13 @@ export function StreamDetail({ stream, areas, onUpdate, onAppendLog, onDelete }:
           </div>
         )}
       </fieldset>
+
+      {/* §3.1: autocomplete from previously used names. No contacts integration. */}
+      <datalist id="known-people">
+        {knownPeople.map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
 
       <fieldset>
         <legend>Target deadline</legend>

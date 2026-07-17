@@ -59,13 +59,17 @@ describe("§2.2 — check-in overdue", () => {
     expect(only(withCadence(7, 3))).toBeUndefined();
   });
 
-  it("no cadence means no check-in trigger, however stale — cadence is opt-in per stream", () => {
-    const noCadence = stream({
+  it("null cadence INHERITS the default rather than meaning 'never' — §8's safety net", () => {
+    const inherits = stream({
       checkInCadenceDays: null,
       lastTouched: instantDaysAgo(400),
       nextStep: { text: "x", owner: { kind: "me" }, setAt: TODAY },
     });
-    expect(only(noCadence)).toBeUndefined();
+    expect(only(inherits)).toBe("check-in-overdue");
+    // ...and honours the inherited number, not the stream's absent one.
+    expect(attentionItems([inherits], NOW, { ...DEFAULT_OPTIONS, defaultCheckInCadenceDays: 90 })[0].detail).toBe(
+      "check-in 310 days overdue",
+    );
   });
 
   it("reports how overdue it is", () => {
@@ -308,16 +312,56 @@ describe("SPEC §8 — no stream can silently rot", () => {
     expect(only(s)).toBe("check-in-overdue");
   });
 
-  it("THE GAP: an active stream with a next step, no cadence and no dates is never surfaced", () => {
-    // Not a bug in the engine -- a real hole in §8's guarantee, reachable
-    // through the M1 UI today. Documented in PLAN so it is chosen, not missed.
-    const s = stream({
+  /** The hole §8 used to have, now closed by the inherited default cadence. */
+  const bare = () =>
+    stream({
       nextStep: { text: "x", owner: { kind: "me" }, setAt: TODAY },
       checkInCadenceDays: null,
       targetDeadline: null,
       nextMilestone: null,
-      lastTouched: instantDaysAgo(9999),
+      lastTouched: instantDaysAgo(200),
     });
+
+  it("a stream with a next step, no cadence and no dates STILL surfaces — it inherits the default", () => {
+    expect(only(bare())).toBe("check-in-overdue");
+  });
+
+  it("a per-stream cadence overrides the default", () => {
+    const s = { ...bare(), checkInCadenceDays: 7, lastTouched: instantDaysAgo(8) };
+    expect(attentionItems([s], NOW)[0].detail).toBe("check-in 1 day overdue");
+  });
+
+  it("a fresh stream with no cadence is quiet until the default elapses", () => {
+    const s = { ...bare(), lastTouched: instantDaysAgo(3) };
+    expect(only(s)).toBeUndefined();
+  });
+
+  it("disabling the default globally reopens the hole — allowed, but as a choice", () => {
+    const opts = { ...DEFAULT_OPTIONS, defaultCheckInCadenceDays: null };
+    expect(attentionItems([bare()], NOW, opts)).toHaveLength(0);
+  });
+
+  it("EVERY live stream reachable through the UI is covered by some trigger", () => {
+    // The §8 guarantee, asserted rather than asserted-about. Sweep the shapes a
+    // user can actually produce and prove none of them can go quiet forever.
+    const ancient = instantDaysAgo(400);
+    const shapes: Stream[] = [
+      stream({ state: "active", nextStep: null, lastTouched: ancient }),
+      stream({ state: "active", nextStep: { text: "x", owner: { kind: "me" }, setAt: TODAY }, lastTouched: ancient }),
+      stream({ state: "active", nextStep: { text: "x", owner: { kind: "person", name: "B" }, setAt: TODAY }, lastTouched: ancient }),
+      stream({ state: "active", nextStep: { text: "x", owner: { kind: "me" }, setAt: TODAY }, checkInCadenceDays: 90, lastTouched: ancient }),
+      stream({ state: "waiting", waitingSince: addDays(TODAY, -400), nextStep: { text: "x", owner: { kind: "person", name: "B" }, setAt: TODAY }, lastTouched: ancient }),
+      stream({ state: "parked", wakeUpDate: addDays(TODAY, -1), lastTouched: ancient }),
+    ];
+    for (const s of shapes) {
+      expect(attentionItems([s], NOW), `${s.state}/${s.nextStep?.owner.kind ?? "no-step"}`).toHaveLength(1);
+    }
+  });
+
+  it("a parked stream sleeping into the future is the ONE legitimate silence", () => {
+    // Not rot: a wake-up date is a promise to resurface, so it is covered.
+    const s = stream({ state: "parked", wakeUpDate: addDays(TODAY, 30), lastTouched: instantDaysAgo(400) });
     expect(attentionItems([s], NOW)).toHaveLength(0);
+    expect(s.wakeUpDate).not.toBeNull();
   });
 });

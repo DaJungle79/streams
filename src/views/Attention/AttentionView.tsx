@@ -1,4 +1,4 @@
-import { AttentionItem, attentionGroups } from "../../core/attentionEngine";
+import { AttentionItem, AttentionOptions, attentionGroups } from "../../core/attentionEngine";
 import { toDay } from "../../core/days";
 import { Area } from "../../models/area";
 import { Stream } from "../../models/stream";
@@ -7,6 +7,7 @@ type Props = {
   streams: Stream[];
   areas: Area[];
   now: Date;
+  opts: AttentionOptions;
   onOpen: (id: string) => void;
   onCompleteStep: (id: string) => void;
   onCheckIn: (id: string) => void;
@@ -17,12 +18,13 @@ export function AttentionView({
   streams,
   areas,
   now,
+  opts,
   onOpen,
   onCompleteStep,
   onCheckIn,
   onSnooze,
 }: Props) {
-  const groups = attentionGroups(streams, now);
+  const groups = attentionGroups(streams, now, opts);
   const areaById = new Map(areas.map((a) => [a.id, a]));
 
   // SPEC §2: "When the view is empty, it says so — an explicit 'nothing needs

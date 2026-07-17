@@ -52,7 +52,7 @@ textarea { resize: vertical; }
   height: 100vh;
 }
 /* The attention view is the app; it gets the whole canvas. */
-.app-attention { grid-template-columns: 180px 1fr; }
+.app-wide { grid-template-columns: 180px 1fr; }
 .pane-wide { padding: 0; }
 
 .boot { padding: 40px; }
@@ -339,3 +339,11 @@ fieldset > input { width: 100%; }
 }
 .parse-ok { color: var(--accent); }
 .parse-miss { color: var(--muted); }
+
+.att-nav-sub { margin-bottom: 2px; font-weight: 400; }
+.att-overdue {
+  color: var(--danger);
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 400;
+}
