@@ -57,6 +57,10 @@ export function Sidebar({
         {waitingCount > 0 && <span className="area-count">{waitingCount}</span>}
       </button>
 
+      <button className={`att-nav att-nav-sub ${screen === "review" ? "is-selected" : ""}`} onClick={() => onGoTo("review")}>
+        <span className="area-name">Review</span>
+      </button>
+
       <button className={`att-nav att-nav-sub ${screen === "archive" ? "is-selected" : ""}`} onClick={() => onGoTo("archive")}>
         <span className="area-name">Archive</span>
       </button>

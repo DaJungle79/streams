@@ -12,6 +12,7 @@ import {
   flushPending,
   loadAll,
   saveAreasNow,
+  saveSettingsNow,
   saveStream,
   saveStreamNow,
 } from "./repository";
@@ -40,6 +41,8 @@ export type Store = {
   snooze: (id: string, days: number) => void;
   nudge: (id: string) => void;
   reactivate: (id: string) => void;
+  startReview: () => Promise<void>;
+  finishReview: () => Promise<void>;
 };
 
 export function useStore(): Store {
@@ -208,6 +211,28 @@ export function useStore(): Store {
     await deleteStreamFile(id);
   }, []);
 
+  /** §3.4: begin a pass. The timestamp is the whole of the resumable state. */
+  const startReview = useCallback(async () => {
+    const next: Settings = { ...settings, activeReviewStartedAt: new Date().toISOString() };
+    setSettings(next);
+    await saveSettingsNow(next);
+  }, [settings]);
+
+  /**
+   * End a pass, whether completed or abandoned.
+   *
+   * `lastReviewAt` is stamped either way: §3.4's weekly nudge is about "when did
+   * you last sit down with these", and a half-finished pass still counted. The
+   * streams you skipped are still overdue on their own cadence, so nothing gets
+   * away with it.
+   */
+  const finishReview = useCallback(async () => {
+    const now = new Date().toISOString();
+    const next: Settings = { ...settings, activeReviewStartedAt: null, lastReviewAt: now };
+    setSettings(next);
+    await saveSettingsNow(next);
+  }, [settings]);
+
   const createArea = useCallback(
     async (name: string, color: string) => {
       const next = [...areas, newArea(name, color)];
@@ -234,5 +259,7 @@ export function useStore(): Store {
     snooze,
     nudge,
     reactivate,
+    startReview,
+    finishReview,
   };
 }

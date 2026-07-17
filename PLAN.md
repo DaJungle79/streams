@@ -168,10 +168,16 @@ Decisions:
 - **Waiting groups by person, not stream**, because chasing Bob about four things is one conversation. People sort by longest wait: the oldest is likeliest to have been quietly dropped.
 - **"Nudge sent" resets `waitingSince`.** You've acted, so §2.4's clock restarts; the log keeps the real history.
 
-### M4 — Weekly review mode
-Guided full-screen flow (relevant? → step right? → owner right?), progress, skip/resume, review-counts-as-check-in, and the ">25% overdue" nudge.
-**Done when:** a 25-stream review runs end-to-end without touching any other screen.
-**Size:** ~10%.
+### M4 — Weekly review mode ✅ DONE
+Guided full-screen flow, progress, skip, resume, and the ">25% overdue"/weekly nudge.
+**Size:** ~10%. 180 tests (170 TS, 10 Rust).
+
+- **Resumability is one timestamp, not a list.** `settings.activeReviewStartedAt` is the entire persisted state: a stream is reviewed-this-pass when `lastTouched >= startedAt`. Nothing to keep in sync, nothing to merge across two Macs at M6, and it survives a restart for free. It also means an edit made *outside* the review counts — which is §3.2's own rule (any touch satisfies a check-in), not a loophole.
+- **Skip is session-local.** "Not now" ≠ "reviewed". Persisting a skip would let a stream dodge an entire pass silently, which is the thing §3.4 exists to break. Skipped streams remain overdue on their own cadence.
+- **`lastReviewAt` is stamped even on an abandoned pass.** The weekly nudge asks "when did you last sit down with these", and a half-finished pass counts. What you skipped is still caught by §2.
+- **The queue is high-priority-first, then stalest**, so a review abandoned halfway still covered what mattered most.
+- **The nudge is dismissed by acting, not by an X.** A banner you can wave away is one you stop seeing.
+- **"More than 25%" is literal** — exactly 25% doesn't fire — and 0 active streams is not 100% overdue. An empty app must never nag.
 
 ### M5 — macOS surface
 Tray icon with attention count via `set_title` and top-5 dropdown. Accessory activation policy + hide-on-close. Global hotkey quick capture with `>area` syntax. Notification scheduling per M0's outcome: milestone/window/wake-up alerts + the single daily digest. Launch-at-login via autostart plugin.

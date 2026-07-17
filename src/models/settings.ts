@@ -36,6 +36,26 @@ export const Settings = z.object({
 
   /** SPEC §4.3: the single daily digest, "default 08:30". */
   digestTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "expected HH:MM"),
+
+  /**
+   * When the last weekly review finished. Drives §3.4's "suggest weekly".
+   * Defaulted rather than required so a settings.json written before reviews
+   * existed still parses — an unknown preference must never look like a
+   * corrupt file.
+   */
+  lastReviewAt: z.iso.datetime().nullable().default(null),
+
+  /**
+   * Set while a review is in progress; null when none is running.
+   *
+   * This one field is what makes §3.4 resumable across a restart. A stream
+   * counts as reviewed when `lastTouched >= activeReviewStartedAt`, so the
+   * queue rebuilds itself from data that already exists — no list of reviewed
+   * ids to persist and get out of sync. It also means editing a stream outside
+   * the review counts as reviewing it, which is exactly §3.2's rule that any
+   * touch satisfies a check-in.
+   */
+  activeReviewStartedAt: z.iso.datetime().nullable().default(null),
 });
 
 export type Settings = z.infer<typeof Settings>;
@@ -49,4 +69,6 @@ export const DEFAULT_SETTINGS: Settings = {
   waitingThresholdDays: 7,
   milestoneHorizonDays: 7,
   digestTime: "08:30",
+  lastReviewAt: null,
+  activeReviewStartedAt: null,
 };

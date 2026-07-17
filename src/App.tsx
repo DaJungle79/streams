@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { AttentionOptions, attentionCount } from "./core/attentionEngine";
+import { shouldSuggestReview } from "./core/review";
 import { waitingByPerson } from "./core/waiting";
 import { ArchiveView } from "./views/Archive/ArchiveView";
 import { AttentionView } from "./views/Attention/AttentionView";
 import { Sidebar } from "./views/Sidebar/Sidebar";
 import { StreamDetail } from "./views/StreamDetail/StreamDetail";
+import { ReviewView } from "./views/Review/ReviewView";
 import { StreamList } from "./views/StreamList/StreamList";
 import { WaitingView } from "./views/Waiting/WaitingView";
 import { useStore } from "./storage/useStore";
@@ -15,7 +17,7 @@ import "./styles.css";
  * database." So Attention is the launch screen and everything else is somewhere
  * you go, not the default.
  */
-export type Screen = "attention" | "waiting" | "archive" | "list";
+export type Screen = "attention" | "waiting" | "archive" | "list" | "review";
 
 export default function App() {
   const store = useStore();
@@ -66,6 +68,16 @@ export default function App() {
     void store.createStream(title, target).then((s) => setStreamId(s.id));
   };
 
+  const suggestion = shouldSuggestReview(store.streams, now, store.settings.lastReviewAt, opts);
+  const reviewing = store.settings.activeReviewStartedAt !== null;
+
+  const beginReview = () => {
+    void store.startReview().then(() => setScreen("review"));
+  };
+  const endReview = () => {
+    void store.finishReview().then(() => setScreen("attention"));
+  };
+
   const wide = screen !== "list";
 
   return (
@@ -80,7 +92,7 @@ export default function App() {
         }}
         onCreateArea={(n, c) => void store.createArea(n, c)}
         screen={screen}
-        onGoTo={setScreen}
+        onGoTo={(t) => (t === "review" && !reviewing ? beginReview() : setScreen(t))}
         attentionCount={attentionCount(store.streams, now, opts)}
         waitingCount={waitingByPerson(store.streams, now).length}
       />
@@ -114,6 +126,39 @@ export default function App() {
       ) : (
         <main className="pane pane-wide">
           <InvalidBanner store={store} />
+          {screen === "attention" && suggestion.suggest && !reviewing && (
+            // §3.4's nudge. Dismissible by acting, not by an X: an ignorable
+            // banner is one you stop seeing.
+            <div className="suggest">
+              <span>
+                <strong>Time for a weekly review</strong> — {suggestion.reason}.
+              </span>
+              <button className="chip" onClick={beginReview}>
+                Start review
+              </button>
+            </div>
+          )}
+          {screen === "attention" && reviewing && (
+            <div className="suggest">
+              <span>
+                <strong>Review in progress</strong> — picked up where you left off.
+              </span>
+              <button className="chip" onClick={() => setScreen("review")}>
+                Resume
+              </button>
+            </div>
+          )}
+          {screen === "review" && store.settings.activeReviewStartedAt && (
+            <ReviewView
+              streams={store.streams}
+              areas={store.areas}
+              startedAt={store.settings.activeReviewStartedAt}
+              knownPeople={peopleOf(store.streams)}
+              onUpdate={store.updateStream}
+              onFinish={endReview}
+              onOpen={open}
+            />
+          )}
           {screen === "attention" && (
             <AttentionView
               streams={store.streams}
