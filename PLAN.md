@@ -229,13 +229,6 @@ Verified end-to-end against real files: a Dropbox-style conflicted copy was dete
 
 The archived [predecessor](https://github.com/DaJungle79) (`~/Projects/streams-legacy-2026-05`) implemented this against **EventKit** and got `isCompleted()` read-back working — so two-way sync is proven feasible on this machine if §7's deferral is ever revisited. Its S3 spike also found that `defaultCalendarForNewReminders()` can resolve to a list you aren't viewing, so a reminder saves but "doesn't appear". That's why `LIST_NAME` is a dedicated list here and never the default — the same conclusion §4.5 reached independently.
 
-### M7 — Apple Reminders mirror (original plan)
-`mirrorSet.ts` as a pure, tested projection (active + owner-is-me). Reconciler diffing it against the local ID map. `reminders.rs` osascript layer: create/update/delete in a dedicated `Streams` list. `mirrorToReminders` setting (default off, machine-local). Due dates from milestone dates only — never from fuzzy `earliest` (SPEC §4.5).
-**Done when:** completing a step removes its reminder; reassigning a step to someone else removes it; parking a stream removes it; enabling the setting on a second Mac is impossible/warned (single-writer rule); and no duplicate reminders exist after a full startup reconcile.
-**Size:** ~8%.
-
-**Placement is flexible.** M7 depends only on §3.1's owner semantics (M3), not on the AttentionEngine — so it can slot in right after M3 if the iPhone glance is what you want soonest. It's last here because it's strictly additive: one-way, isolated behind one module, and nothing else reads from it. It's also the milestone most likely to be deferred indefinitely once the tray badge turns out to be enough.
-
 ## Order rationale
 
 - **M0 first** because it holds the only two unknowns that could force a spec change, and it's two hours.
