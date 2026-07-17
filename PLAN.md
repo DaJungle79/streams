@@ -129,10 +129,30 @@ Decisions made while building, worth carrying forward:
 - **Directory watcher deferred.** `notify` is a dependency but unwired: nothing writes to the store except this app until M6 points it at a sync folder. Wire it there, where it has a reason to exist.
 - **`"targets": ["app"]`** — see the DMG risk row.
 
-### M2 — The brain (parser + attention engine)
-FuzzyDateParser with the SPEC §1 grammar, built test-first; inline interpretation preview in the deadline field. AttentionEngine producing the five grouped trigger lists; Attention view becomes the main screen with row actions (complete step → prompt replacement, log note, snooze, open). Empty state screen.
-**Done when:** engine tests cover every trigger and edge (no next step, overdue cadence, window opening, waiting > threshold, wake-up today, priority pinning); attention view is the launch screen.
-**Size:** ~25%. This is the product; take the time here.
+### M2 — The brain (parser + attention engine) ✅ DONE
+FuzzyDateParser (58 tests) with inline interpretation in the deadline field. AttentionEngine (38 tests) producing the five grouped trigger lists. Attention view is the launch screen, with row actions and the §2 empty state.
+**Size:** ~25%. 129 tests total (119 TS, 10 Rust).
+
+Interpretations of SPEC §2 that the code now commits to:
+
+- **One stream, one reason.** §2 groups by reason and each row shows "the reason it's here" — singular — so a stream tripping several appears once, under the most actionable. Precedence: `waking-up > no-next-step > deadline-window > waiting-too-long > check-in-overdue`. Check-in ranks last because it's the weakest claim ("you haven't looked") and *any* touch satisfies it (§3.2), so acting on any other reason clears it anyway. This also makes §4.1's tray count — "number of streams" — just the item count, so the tray can never drift from the view.
+- **A parked stream is silent on every trigger but its wake-up.** Dormancy is deliberate; nagging about a deadline you parked past is the noise that gets the whole view tuned out.
+- **A missed wake-up or an overdue milestone still fires.** Passing the date must never silence a trigger — that's rot with extra steps.
+- **The deadline detail shows the label, never the raw date.** "end of Q3 2026" is what the user meant; `2026-09-01` is an implementation detail they explicitly didn't commit to.
+- **"Step done" prompts for the replacement by dropping the stream into §2.1**, not by opening a modal. A dialog you can dismiss lets the stream go quiet; an attention row doesn't.
+- **The parser declines rather than guesses.** Ambiguous input (`03/04/2026` — 3 April or 4 March?) returns null and falls back to manual pickers. §1 makes that fallback cheap, which is exactly what buys the right to be strict.
+
+#### ⚠️ Known gap in SPEC §8
+
+§8 claims *"every stream is always covered by at least one attention trigger."* It isn't true as specced, and the engine faithfully reproduces the hole:
+
+> An **active** stream with a next step, **no cadence**, no target deadline and no milestone trips nothing — forever. Its next step can be two years stale and it never surfaces.
+
+Reachable through the M1 UI today (cadence is optional and defaults to none). Pinned by a test in `attentionEngine.test.ts` so it stays a known choice rather than a surprise. Candidate fixes, in rough order of preference:
+
+1. **A default cadence in `settings.json`** — §6's storage layout already anticipates "cadence defaults", so every stream inherits one unless explicitly opted out. Closes the hole with no new concepts.
+2. **A stale-next-step trigger** — `nextStep.setAt` is already stored; fire when a step has gone untouched for N days. Catches the real failure (a step nobody's moved) rather than proxying it through "you haven't looked".
+3. **Make cadence mandatory** — simplest, but forces a number onto every idea you jot down.
 
 ### M3 — Oversight mechanics
 Waiting view grouped by person with "nudge sent". Log timeline with automatic entries for structural events. Check-in actions and cadence editing. Archive with reactivation. Priority pinning everywhere.

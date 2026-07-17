@@ -1,22 +1,7 @@
-import { IsoDay } from "../models/common";
 import { Stream, StreamState } from "../models/stream";
+import { addDays, toDay } from "./days";
 
-export function toDay(d: Date): IsoDay {
-  // Local calendar day, not UTC. A stream parked late on the 17th in Sofia
-  // should wake on the user's date, not yesterday's UTC one.
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-export function addDays(day: IsoDay, n: number): IsoDay {
-  const [y, m, d] = day.split("-").map(Number);
-  // Construct at noon so a DST shift can't roll the date backwards.
-  const dt = new Date(y, m - 1, d, 12);
-  dt.setDate(dt.getDate() + n);
-  return toDay(dt);
-}
+export { addDays, toDay };
 
 /** SPEC §4.2: quick-captured streams park for a week by default. */
 export const DEFAULT_WAKE_UP_DAYS = 7;

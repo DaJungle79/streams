@@ -10,9 +10,21 @@ type Props = {
   selectedAreaId: string | null;
   onSelectArea: (id: string | null) => void;
   onCreateArea: (name: string, color: string) => void;
+  screen: "attention" | "list";
+  attentionCount: number;
+  onShowAttention: () => void;
 };
 
-export function Sidebar({ areas, streams, selectedAreaId, onSelectArea, onCreateArea }: Props) {
+export function Sidebar({
+  areas,
+  streams,
+  selectedAreaId,
+  onSelectArea,
+  onCreateArea,
+  screen,
+  attentionCount,
+  onShowAttention,
+}: Props) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
 
@@ -30,6 +42,16 @@ export function Sidebar({ areas, streams, selectedAreaId, onSelectArea, onCreate
 
   return (
     <nav className="sidebar">
+      <button
+        className={`att-nav ${screen === "attention" ? "is-selected" : ""}`}
+        onClick={onShowAttention}
+      >
+        <span className="area-name">Attention</span>
+        {/* No zero badge: "nothing needs you" is the AttentionView's line to
+            deliver, and a grey 0 here would undercut it. */}
+        {attentionCount > 0 && <span className="att-badge">{attentionCount}</span>}
+      </button>
+
       <div className="sidebar-section">Areas</div>
 
       <button

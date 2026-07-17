@@ -51,6 +51,9 @@ textarea { resize: vertical; }
   grid-template-columns: 180px 300px 1fr;
   height: 100vh;
 }
+/* The attention view is the app; it gets the whole canvas. */
+.app-attention { grid-template-columns: 180px 1fr; }
+.pane-wide { padding: 0; }
 
 .boot { padding: 40px; }
 .boot-error pre { white-space: pre-wrap; color: var(--danger); }
@@ -223,6 +226,101 @@ fieldset > input { width: 100%; }
   cursor: pointer;
 }
 
+/* Attention */
+.att-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  margin-bottom: 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-weight: 500;
+}
+.att-nav:hover { background: color-mix(in srgb, var(--text) 7%, transparent); }
+.att-nav.is-selected { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.att-badge {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.attention { padding: 20px 24px; overflow-y: auto; height: 100vh; }
+.att-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.att-header h1 { font-size: 19px; margin: 0; }
+
+.att-group { margin-bottom: 22px; }
+.att-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+.att-group-count {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 6px;
+  letter-spacing: 0;
+}
+.att-list { list-style: none; margin: 0; padding: 0; }
+
+.att-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  background: var(--panel);
+}
+.att-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.att-title { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.att-area {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 6px;
+}
+/* The reason it's here — the most important line on the row after the title. */
+.att-reason { color: var(--accent); font-size: 12px; }
+.att-step {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.att-actions { display: flex; gap: 4px; flex: none; }
+
+.attention-empty {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.attention-empty-title { font-size: 22px; font-weight: 600; margin: 0; }
+
 .warn {
   border: 1px solid var(--danger);
   border-radius: 8px;
@@ -232,3 +330,12 @@ fieldset > input { width: 100%; }
 }
 .warn ul { margin: 6px 0 0; padding-left: 18px; }
 .warn code { font-family: ui-monospace, monospace; }
+
+/* Inline parser feedback (SPEC §1) */
+.parse-ok, .parse-miss {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.parse-ok { color: var(--accent); }
+.parse-miss { color: var(--muted); }

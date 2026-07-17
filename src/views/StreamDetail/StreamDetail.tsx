@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { parseFuzzyDate } from "../../core/fuzzyDateParser";
 import { toDay, withState } from "../../core/transitions";
 import { Area } from "../../models/area";
 import { LogEntryKind } from "../../models/logEntry";
@@ -17,6 +18,72 @@ const STATES: StreamState[] = ["active", "waiting", "parked", "done"];
 /** A date input needs "" for empty; the model needs null. */
 const dayValue = (d: string | null) => d ?? "";
 const dayOrNull = (v: string) => (v === "" ? null : v);
+
+/**
+ * One text field, parsed live (SPEC §1).
+ *
+ * The interpretation is shown inline for confirmation rather than applied
+ * silently: the parser is guessing at intent, and a wrong guess that looks
+ * confident is worse than no guess. When it can't parse, the manual pickers
+ * below stay authoritative — a gap in the grammar is an inconvenience, never a
+ * blocker.
+ */
+function DeadlineField({
+  stream,
+  set,
+}: {
+  stream: Stream;
+  set: (edit: (s: Stream) => Stream) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const text = draft ?? stream.targetDeadline?.label ?? "";
+  const parsed = text.trim() ? parseFuzzyDate(text, new Date()) : null;
+
+  const commit = (value: string) => {
+    const label = value.trim();
+    if (!label) {
+      set((s) => ({ ...s, targetDeadline: null }));
+      return;
+    }
+    const p = parseFuzzyDate(label, new Date());
+    set((s) => ({
+      ...s,
+      targetDeadline: p
+        ? p
+        : // Unparseable: keep the user's words, and leave the window to the
+          // manual pickers rather than inventing one.
+          s.targetDeadline
+          ? { ...s.targetDeadline, label }
+          : { label, earliest: toDay(new Date()), latest: toDay(new Date()) },
+    }));
+  };
+
+  return (
+    <>
+      <input
+        placeholder='e.g. "end of Q3 2026", "late September", "2026-09-14"'
+        value={text}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          commit(e.target.value);
+        }}
+        onBlur={() => setDraft(null)}
+      />
+      {text.trim() !== "" &&
+        (parsed ? (
+          <p className="parse-ok">
+            {parsed.earliest === parsed.latest
+              ? `→ ${parsed.earliest}`
+              : `→ ${parsed.earliest} to ${parsed.latest}`}
+          </p>
+        ) : (
+          <p className="parse-miss">
+            → couldn't read that — set the window by hand below
+          </p>
+        ))}
+    </>
+  );
+}
 
 export function StreamDetail({ stream, areas, onUpdate, onAppendLog, onDelete }: Props) {
   const [note, setNote] = useState("");
@@ -188,24 +255,7 @@ export function StreamDetail({ stream, areas, onUpdate, onAppendLog, onDelete }:
 
       <fieldset>
         <legend>Target deadline</legend>
-        {/* Manual pickers for now — M2 replaces this with the fuzzy parser. */}
-        <input
-          placeholder='Label, e.g. "end of Q3 2026"'
-          value={deadline?.label ?? ""}
-          onChange={(e) =>
-            set((s) => {
-              const label = e.target.value;
-              if (!label) return { ...s, targetDeadline: null };
-              const today = toDay(new Date());
-              return {
-                ...s,
-                targetDeadline: s.targetDeadline
-                  ? { ...s.targetDeadline, label }
-                  : { label, earliest: today, latest: today },
-              };
-            })
-          }
-        />
+        <DeadlineField stream={stream} set={set} />
         {deadline && (
           <div className="row wrap">
             <span className="muted">from</span>

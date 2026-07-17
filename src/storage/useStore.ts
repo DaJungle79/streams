@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { addDays, toDay } from "../core/days";
 import { Area, newArea } from "../models/area";
 import { LogEntryKind, newLogEntry } from "../models/logEntry";
 import { Stream, touch } from "../models/stream";
@@ -30,6 +31,9 @@ export type Store = {
   removeStream: (id: string) => Promise<void>;
   appendLog: (id: string, kind: LogEntryKind, text: string) => void;
   createArea: (name: string, color: string) => Promise<void>;
+  completeStep: (id: string) => void;
+  checkIn: (id: string) => void;
+  snooze: (id: string, days: number) => void;
 };
 
 export function useStore(): Store {
@@ -96,6 +100,56 @@ export function useStore(): Store {
     [updateStream],
   );
 
+  /**
+   * SPEC §2: "mark step done → prompt for new step".
+   *
+   * The replacement is not prompted here -- clearing the step drops the stream
+   * straight into §2.1 ("No next step"), which *is* the prompt, and one that
+   * survives you closing the dialog. A modal you can dismiss would let the
+   * stream go quiet, which is the one thing the app exists to prevent.
+   */
+  const completeStep = useCallback(
+    (id: string) => {
+      updateStream(id, (s) => {
+        if (!s.nextStep) return s;
+        return {
+          ...s,
+          nextStep: null,
+          log: [newLogEntry("step-completed", s.nextStep.text, new Date()), ...s.log],
+        };
+      });
+    },
+    [updateStream],
+  );
+
+  /** §3.2: an explicit check-in. `touch()` in updateStream does the real work. */
+  const checkIn = useCallback(
+    (id: string) => {
+      updateStream(id, (s) => ({
+        ...s,
+        log: [newLogEntry("checked-in", "checked in", new Date()), ...s.log],
+      }));
+    },
+    [updateStream],
+  );
+
+  /** §2 row action: push a woken stream back to sleep for N more days. */
+  const snooze = useCallback(
+    (id: string, days: number) => {
+      updateStream(id, (s) => {
+        const until = addDays(toDay(new Date()), days);
+        return {
+          ...s,
+          state: "parked",
+          wakeUpDate: until,
+          waitingSince: null,
+          log: [newLogEntry("state-changed", `snoozed until ${until}`, new Date()), ...s.log],
+        };
+      });
+    },
+    [updateStream],
+  );
+
   const createStream = useCallback(async (title: string, areaId: string) => {
     const { newStream } = await import("../models/stream");
     const s = newStream(title, areaId, new Date());
@@ -129,5 +183,8 @@ export function useStore(): Store {
     removeStream,
     appendLog,
     createArea,
+    completeStep,
+    checkIn,
+    snooze,
   };
 }
