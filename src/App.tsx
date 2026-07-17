@@ -9,6 +9,7 @@ import { AttentionView } from "./views/Attention/AttentionView";
 import { Sidebar } from "./views/Sidebar/Sidebar";
 import { StreamDetail } from "./views/StreamDetail/StreamDetail";
 import { ReviewView } from "./views/Review/ReviewView";
+import { SettingsView } from "./views/Settings/SettingsView";
 import { StreamList } from "./views/StreamList/StreamList";
 import { WaitingView } from "./views/Waiting/WaitingView";
 import { digestDue, notifyDigest, notifyEvents } from "./services/notifications";
@@ -21,7 +22,7 @@ import "./styles.css";
  * database." So Attention is the launch screen and everything else is somewhere
  * you go, not the default.
  */
-export type Screen = "attention" | "waiting" | "archive" | "list" | "review";
+export type Screen = "attention" | "waiting" | "archive" | "list" | "review" | "settings";
 
 export default function App() {
   const store = useStore();
@@ -195,6 +196,9 @@ export default function App() {
               onOpen={open}
               onNudge={store.nudge}
             />
+          )}
+          {screen === "settings" && (
+            <SettingsView settings={store.settings} onChange={store.updateSettings} />
           )}
           {screen === "archive" && (
             <ArchiveView

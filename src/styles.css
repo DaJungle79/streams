@@ -461,3 +461,17 @@ fieldset > input { width: 100%; }
 }
 .storefolder .chip { font-size: 11px; }
 .sidebar-hint code { font-family: ui-monospace, monospace; }
+
+/* Settings */
+.set-group { max-width: 620px; }
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.set-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.set-hint { font-size: 11px; }
+.cog { font-size: 13px; opacity: 0.7; }

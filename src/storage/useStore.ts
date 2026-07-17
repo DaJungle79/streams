@@ -43,6 +43,7 @@ export type Store = {
   reactivate: (id: string) => void;
   startReview: () => Promise<void>;
   finishReview: () => Promise<void>;
+  updateSettings: (edit: (s: Settings) => Settings) => void;
 };
 
 export function useStore(): Store {
@@ -211,6 +212,18 @@ export function useStore(): Store {
     await deleteStreamFile(id);
   }, []);
 
+  /**
+   * Settings are written immediately, not debounced: they're rare, tiny, and a
+   * lost preference is confusing in a way a lost keystroke isn't.
+   */
+  const updateSettings = useCallback((edit: (s: Settings) => Settings) => {
+    setSettings((prev) => {
+      const next = edit(prev);
+      void saveSettingsNow(next).catch((e) => console.error("settings save failed", e));
+      return next;
+    });
+  }, []);
+
   /** §3.4: begin a pass. The timestamp is the whole of the resumable state. */
   const startReview = useCallback(async () => {
     const next: Settings = { ...settings, activeReviewStartedAt: new Date().toISOString() };
@@ -261,5 +274,6 @@ export function useStore(): Store {
     reactivate,
     startReview,
     finishReview,
+    updateSettings,
   };
 }

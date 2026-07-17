@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toDay, withState } from "../../core/transitions";
 import { reviewProgress, reviewQueue } from "../../core/review";
 import { Area } from "../../models/area";
 import { Stream, StreamState } from "../../models/stream";
+import { DraftInput } from "../common/DraftInput";
 
 type Props = {
   streams: Stream[];
@@ -36,12 +37,41 @@ export function ReviewView({
   // exactly the silence §3.4 exists to break.
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
 
+  /**
+   * The stream on screen is *pinned*, not derived from the head of the queue.
+   *
+   * Editing a stream touches it, and a touched stream leaves the queue — so a
+   * derived `queue[0]` would swap the card out from under you the instant you
+   * changed the next step, before you ever reached the owner question. The card
+   * changes only when you advance.
+   */
+  const [pinnedId, setPinnedId] = useState<string | null>(null);
+
   const queue = useMemo(
     () => reviewQueue(streams, startedAt).filter((s) => !skipped.has(s.id)),
     [streams, startedAt, skipped],
   );
   const progress = reviewProgress(streams, startedAt);
-  const current = queue[0];
+
+  const current =
+    (pinnedId ? streams.find((s) => s.id === pinnedId && s.state !== "done") : undefined) ?? queue[0];
+
+  // Pin whatever we landed on, so subsequent edits can't move it.
+  useEffect(() => {
+    if (current && pinnedId !== current.id) setPinnedId(current.id);
+  }, [current, pinnedId]);
+
+  const advance = () => {
+    const next = queue.find((s) => s.id !== current?.id);
+    setPinnedId(next?.id ?? null);
+  };
+
+  const skip = () => {
+    if (!current) return;
+    const id = current.id;
+    setSkipped((p) => new Set(p).add(id));
+    setPinnedId(queue.find((s) => s.id !== id)?.id ?? null);
+  };
 
   if (!current) {
     const done = progress.reviewed;
@@ -62,8 +92,12 @@ export function ReviewView({
   const set = (edit: (s: Stream) => Stream) => onUpdate(current.id, edit);
   const area = areas.find((a) => a.id === current.areaId);
 
-  // Any touch counts as the check-in (§3.2), so "keep" just needs to touch.
-  const keep = () => set((s) => ({ ...s }));
+  // Any touch counts as the check-in (§3.2), so "keep" just needs to touch --
+  // then move on, since the card no longer moves by itself.
+  const keep = () => {
+    set((s) => ({ ...s }));
+    advance();
+  };
 
   return (
     <div className="review">
@@ -101,7 +135,14 @@ export function ReviewView({
               Keep
             </button>
             {(["parked", "done"] as StreamState[]).map((st) => (
-              <button key={st} className="chip" onClick={() => set((s) => withState(s, st, new Date()))}>
+              <button
+                key={st}
+                className="chip"
+                onClick={() => {
+                  set((s) => withState(s, st, new Date()));
+                  advance();
+                }}
+              >
                 {st === "parked" ? "Park" : "Done"}
               </button>
             ))}
@@ -110,13 +151,12 @@ export function ReviewView({
 
         <section className="review-q">
           <h2>Is the next step right?</h2>
-          <input
+          <DraftInput
             className="review-input"
             placeholder="What happens next?"
             value={current.nextStep?.text ?? ""}
-            onChange={(e) =>
+            onCommit={(text) =>
               set((s) => {
-                const text = e.target.value;
                 if (!text) return { ...s, nextStep: null };
                 return {
                   ...s,
@@ -128,7 +168,20 @@ export function ReviewView({
             }
           />
           {current.nextStep && (
-            <p className="muted review-hint">set {current.nextStep.setAt}</p>
+            <div className="row review-hint">
+              <span className="muted">set</span>
+              <input
+                type="date"
+                value={current.nextStep.setAt}
+                onChange={(e) =>
+                  set((s) =>
+                    s.nextStep && e.target.value
+                      ? { ...s, nextStep: { ...s.nextStep, setAt: e.target.value } }
+                      : s,
+                  )
+                }
+              />
+            </div>
           )}
         </section>
 
@@ -144,21 +197,24 @@ export function ReviewView({
             >
               me
             </button>
-            <input
+            <DraftInput
               list="known-people"
               className="review-owner"
               placeholder="…or a person"
               disabled={!current.nextStep}
               value={current.nextStep?.owner.kind === "person" ? current.nextStep.owner.name : ""}
-              onChange={(e) =>
-                set((s) => {
-                  if (!s.nextStep) return s;
-                  const name = e.target.value;
-                  return {
-                    ...s,
-                    nextStep: { ...s.nextStep, owner: name ? { kind: "person", name } : { kind: "me" } },
-                  };
-                })
+              onCommit={(name) =>
+                set((s) =>
+                  s.nextStep
+                    ? {
+                        ...s,
+                        nextStep: {
+                          ...s.nextStep,
+                          owner: name ? { kind: "person", name } : { kind: "me" },
+                        },
+                      }
+                    : s,
+                )
               }
             />
             <datalist id="known-people">
@@ -171,7 +227,7 @@ export function ReviewView({
         </section>
 
         <footer className="review-foot">
-          <button className="chip" onClick={() => setSkipped((p) => new Set(p).add(current.id))}>
+          <button className="chip" onClick={skip}>
             Skip
           </button>
           <button className="chip" onClick={() => onOpen(current.id)}>

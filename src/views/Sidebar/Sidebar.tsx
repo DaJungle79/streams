@@ -2,8 +2,7 @@ import { useState } from "react";
 import { Area } from "../../models/area";
 import { Stream } from "../../models/stream";
 import type { Screen } from "../../App";
-import { LoginItem } from "../Settings/LoginItem";
-import { StoreFolder } from "../Settings/StoreFolder";
+
 
 const PALETTE = ["#6b7fd7", "#d78b6b", "#6bd79b", "#d76b9b", "#b06bd7", "#d7c76b"];
 
@@ -113,8 +112,14 @@ export function Sidebar({
       )}
 
       <div className="sidebar-foot">
-        <StoreFolder />
-        <LoginItem />
+        <button
+          className={`att-nav att-nav-sub ${screen === "settings" ? "is-selected" : ""}`}
+          onClick={() => onGoTo("settings")}
+          title="Settings"
+        >
+          <span className="cog" aria-hidden="true">⚙</span>
+          <span className="area-name">Settings</span>
+        </button>
         <p className="sidebar-hint">⌥⌘S to capture</p>
       </div>
     </nav>

@@ -4,6 +4,7 @@ import { toDay, withState } from "../../core/transitions";
 import { Area } from "../../models/area";
 import { LogEntryKind } from "../../models/logEntry";
 import { Stream, StreamState } from "../../models/stream";
+import { DraftInput, DraftTextarea } from "../common/DraftInput";
 
 type Props = {
   stream: Stream;
@@ -36,11 +37,15 @@ function DeadlineField({
   stream: Stream;
   set: (edit: (s: Stream) => Stream) => void;
 }) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const text = draft ?? stream.targetDeadline?.label ?? "";
+  // Live text drives only the preview; the model changes on blur. Deadline
+  // label edits are logged (§3.3 deadline-changed), so committing per keystroke
+  // would write a log entry per character.
+  const [live, setLive] = useState<string | null>(null);
+  const text = live ?? stream.targetDeadline?.label ?? "";
   const parsed = text.trim() ? parseFuzzyDate(text, new Date()) : null;
 
   const commit = (value: string) => {
+    setLive(null);
     const label = value.trim();
     if (!label) {
       set((s) => ({ ...s, targetDeadline: null }));
@@ -61,14 +66,11 @@ function DeadlineField({
 
   return (
     <>
-      <input
+      <DraftInput
         placeholder='e.g. "end of Q3 2026", "late September", "2026-09-14"'
-        value={text}
-        onChange={(e) => {
-          setDraft(e.target.value);
-          commit(e.target.value);
-        }}
-        onBlur={() => setDraft(null)}
+        value={stream.targetDeadline?.label ?? ""}
+        onDraft={setLive}
+        onCommit={commit}
       />
       {text.trim() !== "" &&
         (parsed ? (
@@ -101,10 +103,10 @@ export function StreamDetail({ stream, areas, knownPeople, onUpdate, onAppendLog
 
   return (
     <div className="detail">
-      <input
+      <DraftInput
         className="detail-title"
         value={stream.title}
-        onChange={(e) => set((s) => ({ ...s, title: e.target.value || s.title }))}
+        onCommit={(title) => set((s) => ({ ...s, title: title.trim() || s.title }))}
       />
 
       <div className="grid">
@@ -149,11 +151,10 @@ export function StreamDetail({ stream, areas, knownPeople, onUpdate, onAppendLog
         </div>
 
         <label>Outcome</label>
-        <textarea
-          rows={2}
+        <DraftTextarea
           placeholder="What is this driving toward?"
           value={stream.outcome}
-          onChange={(e) => set((s) => ({ ...s, outcome: e.target.value }))}
+          onCommit={(outcome) => set((s) => ({ ...s, outcome }))}
         />
 
         {stream.state === "parked" && (
@@ -206,12 +207,13 @@ export function StreamDetail({ stream, areas, knownPeople, onUpdate, onAppendLog
 
       <fieldset>
         <legend>Next step</legend>
-        <input
+        {/* Commits on blur: every keystroke here is a logged structural event
+            (§3.3), so per-character updates would bury the log in "c" -> "ca". */}
+        <DraftInput
           placeholder="What happens next?"
           value={stream.nextStep?.text ?? ""}
-          onChange={(e) =>
+          onCommit={(text) =>
             set((s) => {
-              const text = e.target.value;
               if (!text) return { ...s, nextStep: null };
               return {
                 ...s,
@@ -232,25 +234,38 @@ export function StreamDetail({ stream, areas, knownPeople, onUpdate, onAppendLog
             >
               me
             </button>
-            <input
+            <DraftInput
               list="known-people"
               placeholder="…or a person's name"
               value={stream.nextStep.owner.kind === "person" ? stream.nextStep.owner.name : ""}
-              onChange={(e) =>
-                set((s) => {
-                  if (!s.nextStep) return s;
-                  const name = e.target.value;
-                  return {
-                    ...s,
-                    nextStep: {
-                      ...s.nextStep,
-                      owner: name ? { kind: "person", name } : { kind: "me" },
-                    },
-                  };
-                })
+              onCommit={(name) =>
+                set((s) =>
+                  s.nextStep
+                    ? {
+                        ...s,
+                        nextStep: {
+                          ...s.nextStep,
+                          owner: name ? { kind: "person", name } : { kind: "me" },
+                        },
+                      }
+                    : s,
+                )
               }
             />
-            <span className="muted">set {stream.nextStep.setAt}</span>
+            <span className="muted">set</span>
+            {/* Editable: a step's age is what makes it visibly stale, and a
+                wrong date silently forgives one that's been sitting for months. */}
+            <input
+              type="date"
+              value={stream.nextStep.setAt}
+              onChange={(e) =>
+                set((s) =>
+                  s.nextStep && e.target.value
+                    ? { ...s, nextStep: { ...s.nextStep, setAt: e.target.value } }
+                    : s,
+                )
+              }
+            />
           </div>
         )}
       </fieldset>
@@ -310,12 +325,11 @@ export function StreamDetail({ stream, areas, knownPeople, onUpdate, onAppendLog
       <fieldset>
         <legend>Next milestone</legend>
         <div className="row wrap">
-          <input
+          <DraftInput
             placeholder="Milestone"
             value={stream.nextMilestone?.text ?? ""}
-            onChange={(e) =>
+            onCommit={(text) =>
               set((s) => {
-                const text = e.target.value;
                 if (!text) return { ...s, nextMilestone: null };
                 return {
                   ...s,
