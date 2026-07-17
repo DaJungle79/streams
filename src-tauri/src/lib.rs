@@ -1,3 +1,4 @@
+mod config;
 mod storage;
 mod tray;
 
@@ -18,6 +19,7 @@ const AUTOSTART_FLAG: &str = "--autostart";
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         // The flag is how a login launch identifies itself, so §4.4's "main
         // window stays closed" can be honoured without suppressing the window
@@ -44,6 +46,10 @@ pub fn run() {
             storage::delete_stream,
             storage::read_root_file,
             storage::write_root_file,
+            storage::read_conflicts,
+            storage::delete_conflict,
+            config::get_store_root,
+            config::set_store_root,
             tray::update_tray,
             hide_capture,
         ])

@@ -449,3 +449,15 @@ fieldset > input { width: 100%; }
 .sidebar-hint { color: var(--muted); font-size: 11px; margin: 8px 0 0; padding: 0 8px; }
 .loginitem { padding: 0 4px; }
 .loginitem .chip { font-size: 11px; }
+
+.storefolder { padding: 0 4px 10px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+.storefolder-path {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 10px;
+  color: var(--muted);
+  margin: 0 0 6px;
+  padding: 0 4px;
+  word-break: break-all;
+}
+.storefolder .chip { font-size: 11px; }
+.sidebar-hint code { font-family: ui-monospace, monospace; }

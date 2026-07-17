@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { appDataDir, join } from "@tauri-apps/api/path";
+import { mergeStreams } from "../core/merge";
 import { Area, AreasFile } from "../models/area";
 import { DEFAULT_SETTINGS, Settings } from "../models/settings";
 import { Stream } from "../models/stream";
@@ -7,12 +7,22 @@ import { Stream } from "../models/stream";
 /**
  * The single place the store's location is decided.
  *
- * M1 keeps it in the app-data dir. M6 points it at the user's sync folder --
- * and because nothing else in the codebase knows where the store lives, that
- * milestone is this one function plus merge logic (PLAN, "Order rationale").
+ * Resolved by Rust from a machine-local config, because this is the one setting
+ * that can't live in settings.json (which lives inside the store) and must not
+ * sync (each Mac has its own path to the same folder). Cached because it can't
+ * change without a reload.
  */
+let cachedRoot: string | null = null;
+
 export async function storeRoot(): Promise<string> {
-  return join(await appDataDir(), "Streams");
+  if (cachedRoot === null) cachedRoot = await invoke<string>("get_store_root");
+  return cachedRoot;
+}
+
+/** Point the store at a new folder. Returns the resolved root. */
+export async function setStoreRoot(root: string | null): Promise<string> {
+  cachedRoot = await invoke<string>("set_store_root", { root });
+  return cachedRoot;
 }
 
 export type InvalidFile = { name: string; error: string };
@@ -38,21 +48,69 @@ function describe(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+type ConflictFile = { filename: string; id: string; contents: string };
+
+/**
+ * Resolve whatever the sync daemon left behind (SPEC §6).
+ *
+ * Runs before anything is shown, so the app never renders a half-merged store.
+ * The order is deliberate: **merge, write, verify, only then delete.** If the
+ * write fails, the conflicted copy stays on disk and we try again next launch —
+ * a duplicate file is a nuisance, a deleted one is gone.
+ */
+async function resolveConflicts(
+  root: string,
+  streams: Map<string, Stream>,
+  invalid: InvalidFile[],
+): Promise<number> {
+  const conflicts = await invoke<ConflictFile[]>("read_conflicts", { root });
+  let merged = 0;
+
+  for (const c of conflicts) {
+    let theirs: Stream;
+    try {
+      theirs = Stream.parse(JSON.parse(c.contents));
+    } catch (e) {
+      // Unreadable conflicted copy: leave the file alone and say so. Deleting
+      // it would destroy the only surviving record of that edit.
+      invalid.push({ name: c.filename, error: describe(e) });
+      continue;
+    }
+
+    const ours = streams.get(c.id);
+    try {
+      const result = ours ? mergeStreams(ours, theirs, new Date()).stream : theirs;
+      await saveStreamNow(result);
+      streams.set(result.id, result);
+      await invoke("delete_conflict", { root, filename: c.filename });
+      merged++;
+    } catch (e) {
+      invalid.push({ name: c.filename, error: `merge failed: ${describe(e)}` });
+    }
+  }
+
+  return merged;
+}
+
 export async function loadAll(): Promise<LoadResult> {
   const root = await storeRoot();
   await invoke("init_store", { root });
 
   const files = await invoke<RawFile[]>("read_all_streams", { root });
-  const streams: Stream[] = [];
+  const byId = new Map<string, Stream>();
   const invalid: InvalidFile[] = [];
 
   for (const f of files) {
     try {
-      streams.push(Stream.parse(JSON.parse(f.contents)));
+      const s = Stream.parse(JSON.parse(f.contents));
+      byId.set(s.id, s);
     } catch (e) {
       invalid.push({ name: f.name, error: describe(e) });
     }
   }
+
+  await resolveConflicts(root, byId, invalid);
+  const streams = [...byId.values()];
 
   let areas: Area[] = [];
   const areasRaw = await invoke<string | null>("read_root_file", {

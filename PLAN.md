@@ -193,10 +193,21 @@ Build fixes worth remembering: `tauri` needs `features = ["tray-icon"]` (not def
 
 **Not yet confirmed on device** (needs a human): the tray icon rendering and its count, ⌥⌘S summoning the panel, a notification actually appearing from this build, and the login-item round trip. M0 proved notifications *can* fire from an ad-hoc build; it did not prove this app's wiring is right.
 
-### M6 — Sync + ship
-Point the storage path at the sync folder. Conflict detection and merge (SPEC §6) with tests covering: concurrent scalar edits, concurrent log appends, and an edit-vs-delete race. Verify on two Macs. App icon, Settings polish, `tauri build`, drag to `/Applications`.
-**Done when:** two Macs converge on the same state after concurrent offline edits, with no log entry lost.
-**Size:** ~10%. Far cheaper than the CloudKit version of this milestone — no schema deployment, no notarization, no Apple admin.
+### M6 — Sync + merge ✅ DONE (single-machine; two-Mac run still pending)
+Configurable store root, conflict detection, merge, folder picker.
+**Size:** ~10%. 231 tests (217 TS, 14 Rust). As predicted, far cheaper than the CloudKit version — no schema deployment, no notarization, no Apple admin.
+
+- **Scalars are last-write-wins; the log is union-by-id.** The asymmetry is the point: a lost title edit is annoying and retypable, a lost log entry is unrecoverable and the log is the stream's memory (§3.3, §8). Because entries are append-only with stable ids, union isn't a heuristic — it's exactly correct.
+- **State conflicts resolve wholesale, not field-by-field.** Cherry-picking across sides could produce parked-with-no-wake-up: a stream the schema rejects *and* that would rot silently. The winner's state travels with its own supporting fields.
+- **Merges are loud.** A `conflict-merged` entry is appended whenever a side actually lost field values — but *not* when the sides differed only by log entries, which is an ordinary sync, not a conflict. A merge you can't see is indistinguishable from data loss you haven't noticed.
+- **Merge → write → only then delete.** If the write fails, the conflicted copy stays on disk and we retry next launch. A duplicate file is a nuisance; a deleted one is gone.
+- **Conflict filenames are detected by leading uuid, not by vendor pattern.** Dropbox, Syncthing and iCloud all decorate the *end* of the stem, so taking the leading uuid handles three known formats and the fourth we haven't met. `delete_conflict` re-derives that rather than trusting the caller, so a merge bug can't eat a real stream file.
+- **The store root is the one setting that can't live in `settings.json`** (which lives inside the store) and **must not sync** (each Mac has its own path to the same folder). It sits alone in `local-config.json` in app-data — same family as M7's reminder-map.
+- **The default root stays app-data.** Turning on sync is a choice, never one an upgrade makes for you.
+
+Verified end-to-end against real files: a Dropbox-style conflicted copy was detected, merged (newer side's fields won, **both** sides' log entries survived, merge logged), and deleted. `.tmp` left clean.
+
+**Not yet done:** the actual two-Mac run, and `/.tmp` in a real `.stignore`.
 
 ### M7 — Apple Reminders mirror
 `mirrorSet.ts` as a pure, tested projection (active + owner-is-me). Reconciler diffing it against the local ID map. `reminders.rs` osascript layer: create/update/delete in a dedicated `Streams` list. `mirrorToReminders` setting (default off, machine-local). Due dates from milestone dates only — never from fuzzy `earliest` (SPEC §4.5).

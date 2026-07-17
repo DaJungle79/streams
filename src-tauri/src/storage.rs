@@ -80,8 +80,16 @@ pub fn ensure_layout(root: &Path) -> Result<(), String> {
 ///    function exists to prevent.
 pub fn atomic_write(root: &Path, target: &Path, contents: &str) -> Result<(), String> {
     ensure_layout(root)?;
+    atomic_write_at(&tmp_dir(root), target, contents)
+}
 
-    let mut tmp = NamedTempFile::new_in(tmp_dir(root)).map_err(|e| err("create temp file", e))?;
+/// `atomic_write` with an explicit scratch directory, for callers outside the
+/// store (see `config.rs`). The scratch dir must share a filesystem with the
+/// target, or the rename stops being atomic.
+pub fn atomic_write_at(scratch: &Path, target: &Path, contents: &str) -> Result<(), String> {
+    fs::create_dir_all(scratch).map_err(|e| err("create scratch dir", e))?;
+
+    let mut tmp = NamedTempFile::new_in(scratch).map_err(|e| err("create temp file", e))?;
     tmp.write_all(contents.as_bytes())
         .map_err(|e| err("write temp file", e))?;
     tmp.as_file()
@@ -140,6 +148,96 @@ pub fn read_all_streams(root: String) -> Result<Vec<LoadedFile>, String> {
         });
     }
     Ok(out)
+}
+
+#[derive(Serialize)]
+pub struct ConflictFile {
+    /// Full filename, needed to delete it once merged.
+    pub filename: String,
+    /// The uuid the conflicted copy belongs to.
+    pub id: String,
+    pub contents: String,
+}
+
+/// The uuid a conflicted-copy filename is derived from, if any.
+///
+/// Every sync tool decorates the *end* of the stem and leaves the original name
+/// in front:
+///   Dropbox    `<uuid> (conflicted copy 2026-07-17).json`
+///   Syncthing  `<uuid>.sync-conflict-20260717-120000-ABCDEF.json`
+///   iCloud     `<uuid> 2.json`
+/// So rather than pattern-match three vendors' formats -- and miss the fourth --
+/// take the leading uuid and treat anything trailing as decoration.
+fn conflict_base_id(stem: &str) -> Option<String> {
+    if stem.len() <= 36 {
+        return None;
+    }
+    let (head, tail) = stem.split_at(36);
+    if !is_uuid(head) {
+        return None;
+    }
+    // Guard against a stem that merely starts with 36 uuid-ish chars: the next
+    // character must be a separator, not more name.
+    let next = tail.chars().next()?;
+    if next.is_ascii_alphanumeric() || next == '-' {
+        return None;
+    }
+    Some(head.to_string())
+}
+
+/// Conflicted copies the sync daemon left behind (SPEC §6).
+#[tauri::command]
+pub fn read_conflicts(root: String) -> Result<Vec<ConflictFile>, String> {
+    let root = Path::new(&root);
+    ensure_layout(root)?;
+
+    let mut out = Vec::new();
+    for entry in fs::read_dir(streams_dir(root)).map_err(|e| err("read streams dir", e))? {
+        let entry = entry.map_err(|e| err("read dir entry", e))?;
+        let path = entry.path();
+
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let Some(id) = conflict_base_id(stem) else {
+            continue;
+        };
+
+        let contents = fs::read_to_string(&path).map_err(|e| err("read conflict", e))?;
+        out.push(ConflictFile {
+            filename: entry.file_name().to_string_lossy().to_string(),
+            id,
+            contents,
+        });
+    }
+    Ok(out)
+}
+
+/// Remove a conflicted copy once its contents have been merged and written.
+#[tauri::command]
+pub fn delete_conflict(root: String, filename: String) -> Result<(), String> {
+    // Only ever a file this module itself identified as a conflict: re-derive
+    // rather than trust the caller, so no path can be smuggled through.
+    let stem = Path::new(&filename)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| format!("not a filename: {filename:?}"))?;
+    if conflict_base_id(stem).is_none() {
+        return Err(format!("refusing to delete non-conflict file: {filename:?}"));
+    }
+    if filename.contains('/') || filename.contains("..") {
+        return Err(format!("refusing suspicious filename: {filename:?}"));
+    }
+
+    let target = streams_dir(Path::new(&root)).join(&filename);
+    match fs::remove_file(&target) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(err("delete conflict", e)),
+    }
 }
 
 #[tauri::command]
@@ -259,6 +357,87 @@ mod tests {
 
         let leftovers = fs::read_dir(root.path().join(".tmp")).unwrap().count();
         assert_eq!(leftovers, 0, "temp file should have been renamed away");
+    }
+
+    const UUID: &str = "11111111-1111-4111-8111-111111111111";
+
+    #[test]
+    fn conflict_base_id_reads_every_vendor_and_no_plain_file() {
+        // Dropbox
+        assert_eq!(
+            conflict_base_id(&format!("{UUID} (conflicted copy 2026-07-17)")).as_deref(),
+            Some(UUID)
+        );
+        // Dropbox, with a user name in it
+        assert_eq!(
+            conflict_base_id(&format!("{UUID} (Ivo's conflicted copy 2026-07-17)")).as_deref(),
+            Some(UUID)
+        );
+        // Syncthing
+        assert_eq!(
+            conflict_base_id(&format!("{UUID}.sync-conflict-20260717-120000-ABCDEF")).as_deref(),
+            Some(UUID)
+        );
+        // iCloud
+        assert_eq!(conflict_base_id(&format!("{UUID} 2")).as_deref(), Some(UUID));
+
+        // A plain stream file is NOT a conflict.
+        assert_eq!(conflict_base_id(UUID), None);
+        // Nor is an unrelated name.
+        assert_eq!(conflict_base_id("notes"), None);
+        // Nor is a longer hex string that merely starts uuid-shaped.
+        assert_eq!(conflict_base_id(&format!("{UUID}aaaa")), None);
+        assert_eq!(conflict_base_id(&format!("{UUID}-extra")), None);
+    }
+
+    #[test]
+    fn read_conflicts_finds_copies_and_ignores_real_streams() {
+        let root = tmp_root();
+        ensure_layout(root.path()).unwrap();
+        let dir = root.path().join("streams");
+        fs::write(dir.join(format!("{UUID}.json")), "{\"real\":true}").unwrap();
+        fs::write(
+            dir.join(format!("{UUID} (conflicted copy 2026-07-17).json")),
+            "{\"conflict\":true}",
+        )
+        .unwrap();
+        fs::write(
+            dir.join(format!("{UUID}.sync-conflict-20260717-120000-ABCDEF.json")),
+            "{\"conflict\":true}",
+        )
+        .unwrap();
+
+        let found = read_conflicts(root.path().to_string_lossy().to_string()).unwrap();
+        assert_eq!(found.len(), 2);
+        assert!(found.iter().all(|c| c.id == UUID));
+    }
+
+    #[test]
+    fn delete_conflict_refuses_a_real_stream_file() {
+        let root = tmp_root();
+        ensure_layout(root.path()).unwrap();
+        let p = root.path().to_string_lossy().to_string();
+        let real = root.path().join("streams").join(format!("{UUID}.json"));
+        fs::write(&real, "{}").unwrap();
+
+        // The guard that stops a merge bug from eating the surviving stream.
+        assert!(delete_conflict(p.clone(), format!("{UUID}.json")).is_err());
+        assert!(real.exists());
+
+        assert!(delete_conflict(p.clone(), "../../evil.json".into()).is_err());
+    }
+
+    #[test]
+    fn delete_conflict_removes_a_conflicted_copy() {
+        let root = tmp_root();
+        ensure_layout(root.path()).unwrap();
+        let p = root.path().to_string_lossy().to_string();
+        let name = format!("{UUID} (conflicted copy 2026-07-17).json");
+        let f = root.path().join("streams").join(&name);
+        fs::write(&f, "{}").unwrap();
+
+        delete_conflict(p, name).unwrap();
+        assert!(!f.exists());
     }
 
     #[test]
