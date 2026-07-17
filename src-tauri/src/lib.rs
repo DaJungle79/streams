@@ -1,4 +1,5 @@
 mod config;
+mod reminders;
 mod storage;
 mod tray;
 
@@ -50,6 +51,14 @@ pub fn run() {
             storage::delete_conflict,
             config::get_store_root,
             config::set_store_root,
+            config::get_mirror_enabled,
+            config::set_mirror_enabled,
+            config::read_reminder_map,
+            config::write_reminder_map,
+            reminders::reminders_create,
+            reminders::reminders_update,
+            reminders::reminders_delete,
+            reminders::reminders_list_ids,
             tray::update_tray,
             hide_capture,
         ])

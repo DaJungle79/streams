@@ -13,6 +13,9 @@ import { SettingsView } from "./views/Settings/SettingsView";
 import { StreamList } from "./views/StreamList/StreamList";
 import { WaitingView } from "./views/Waiting/WaitingView";
 import { digestDue, notifyDigest, notifyEvents } from "./services/notifications";
+import { reconcile } from "./services/remindersMirror";
+import { Area } from "./models/area";
+import { Stream } from "./models/stream";
 import { toDay } from "./core/days";
 import { useStore } from "./storage/useStore";
 import "./styles.css";
@@ -98,6 +101,7 @@ export default function App() {
   return (
     <div className={wide ? "app app-wide" : "app"}>
       <AmbientSync items={items} digestTime={store.settings.digestTime} now={now} />
+      <ReminderSync streams={store.streams} areas={store.areas} />
       <Sidebar
         areas={store.areas}
         streams={store.streams}
@@ -198,7 +202,12 @@ export default function App() {
             />
           )}
           {screen === "settings" && (
-            <SettingsView settings={store.settings} onChange={store.updateSettings} />
+            <SettingsView
+              settings={store.settings}
+              streams={store.streams}
+              areas={store.areas}
+              onChange={store.updateSettings}
+            />
           )}
           {screen === "archive" && (
             <ArchiveView
@@ -249,6 +258,26 @@ function AmbientSync({
     void notifyEvents(items, today);
     if (digestDue(now, digestTime)) void notifyDigest(items, today);
   }, [items, now, digestTime]);
+
+  return null;
+}
+
+/**
+ * Keeps Apple Reminders in step with the mirror set (SPEC §4.5).
+ *
+ * Debounced, and off the interaction path: each osascript call costs ~100-300ms,
+ * so reconciling on every keystroke would make the app feel broken. A few
+ * seconds of lag in a mirror that exists for your phone is invisible.
+ */
+function ReminderSync({ streams, areas }: { streams: Stream[]; areas: Area[] }) {
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void reconcile(streams, areas).then((r) => {
+        if (r.errors.length) console.error("reminders mirror:", r.errors);
+      });
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [streams, areas]);
 
   return null;
 }

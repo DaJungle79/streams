@@ -209,7 +209,27 @@ Verified end-to-end against real files: a Dropbox-style conflicted copy was dete
 
 **Not yet done:** the actual two-Mac run, and `/.tmp` in a real `.stignore`.
 
-### M7 — Apple Reminders mirror
+### M7 — Apple Reminders mirror ✅ DONE (needs the TCC round-trip confirmed)
+`mirrorSet` projection, planner, osascript layer, machine-local map, Settings toggle.
+**Size:** ~8%. 258 tests (242 TS, 16 Rust).
+
+- **The split held.** `mirrorSet.ts` decides *what should exist* (25 tests, no Apple Events); `remindersMirror.ts` diffs it against the map; `reminders.rs` only shells out. The interesting half is testable with Reminders.app closed, which is what PLAN promised.
+- **A fuzzy deadline never becomes a due date.** Only a milestone — §1's one concrete date — does. "end of Q3 2026" is a window; turning it into `2026-09-01` would have your phone nagging on a date you never chose. The label rides in the notes instead.
+- **The fingerprint covers only what the reminder displays**, so a cadence tweak or a priority flag can't churn Reminders.
+- **`date_expr` builds dates field by field.** `date "2026-09-14"` parses against the *user's locale* — same string, different day on en-GB vs en-US, or an outright failure. Setting year/month/day explicitly is the only locale-proof route. 09:00, because a reminder due at midnight is already nine hours overdue by the time you look.
+- **`escape()` closes an injection hole.** Notes are multi-line and user-authored; a stream titled `" & (do shell script "…") & "` would otherwise be executable. Tested.
+- **The map is written after every operation**, not once at the end: if the app dies mid-reconcile, a map that already records what it created is the difference between resuming and duplicating everything.
+- **`healMap` drops entries whose reminder is gone.** Delete a mirrored reminder on your phone and the map would otherwise point at a ghost — never re-created (the map says it exists), never noticed (updates just fail). That would make a stream silently missing from a surface you rely on, which is the one thing the app promises can't happen.
+- **Switching off tears down what it created.** A Reminders list that quietly stops tracking reality is worse than none, because it still looks authoritative.
+- **Default off, machine-local** (§4.5's single-writer rule). Verified: with the mirror off the app sends no Apple Event at all — no TCC entry, no list, no map.
+
+**Not yet confirmed** (needs a human): the TCC prompt on first enable, a reminder actually appearing in a `Streams` list, and the delete-on-complete round trip. M0 proved `osascript`→Reminders works from an ad-hoc build; it didn't prove this wiring.
+
+### Prior-art note
+
+The archived [predecessor](https://github.com/DaJungle79) (`~/Projects/streams-legacy-2026-05`) implemented this against **EventKit** and got `isCompleted()` read-back working — so two-way sync is proven feasible on this machine if §7's deferral is ever revisited. Its S3 spike also found that `defaultCalendarForNewReminders()` can resolve to a list you aren't viewing, so a reminder saves but "doesn't appear". That's why `LIST_NAME` is a dedicated list here and never the default — the same conclusion §4.5 reached independently.
+
+### M7 — Apple Reminders mirror (original plan)
 `mirrorSet.ts` as a pure, tested projection (active + owner-is-me). Reconciler diffing it against the local ID map. `reminders.rs` osascript layer: create/update/delete in a dedicated `Streams` list. `mirrorToReminders` setting (default off, machine-local). Due dates from milestone dates only — never from fuzzy `earliest` (SPEC §4.5).
 **Done when:** completing a step removes its reminder; reassigning a step to someone else removes it; parking a stream removes it; enabling the setting on a second Mac is impossible/warned (single-writer rule); and no duplicate reminders exist after a full startup reconcile.
 **Size:** ~8%.

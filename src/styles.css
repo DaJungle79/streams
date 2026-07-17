@@ -475,3 +475,4 @@ fieldset > input { width: 100%; }
 .set-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .set-hint { font-size: 11px; }
 .cog { font-size: 13px; opacity: 0.7; }
+.set-note { padding-top: 10px; line-height: 1.5; }

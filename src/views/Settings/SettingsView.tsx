@@ -1,9 +1,14 @@
+import { Area } from "../../models/area";
 import { Settings } from "../../models/settings";
+import { Stream } from "../../models/stream";
+import { RemindersMirror } from "./RemindersMirror";
 import { LoginItem } from "./LoginItem";
 import { StoreFolder } from "./StoreFolder";
 
 type Props = {
   settings: Settings;
+  streams: Stream[];
+  areas: Area[];
   onChange: (edit: (s: Settings) => Settings) => void;
 };
 
@@ -50,7 +55,7 @@ function NumberRow({
   );
 }
 
-export function SettingsView({ settings, onChange }: Props) {
+export function SettingsView({ settings, streams, areas, onChange }: Props) {
   return (
     <div className="attention">
       <header className="att-header">
@@ -69,6 +74,11 @@ export function SettingsView({ settings, onChange }: Props) {
           The window stays closed on a login launch — the menu bar is the point. ⌥⌘S captures
           from anywhere.
         </p>
+      </section>
+
+      <section className="att-group set-group">
+        <h2 className="att-group-title">Apple Reminders</h2>
+        <RemindersMirror streams={streams} areas={areas} />
       </section>
 
       <section className="att-group set-group">
