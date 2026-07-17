@@ -116,10 +116,18 @@ The mirror splits the same way everything else does: `mirrorSet.ts` is a pure fu
 
 ## Milestones
 
-### M1 — Skeleton (foundation)
-Tauri v2 project, React + TS. All model types + zod schemas defined. Atomic-write storage layer with the temp+rename guarantee and a directory watcher. Sidebar with areas, stream list, stream detail with full CRUD on every field (deadline via manual date pickers for now).
-**Done when:** create/edit/park/complete streams across areas; data survives relaunch; killing the app mid-write never leaves a corrupt or partial file.
-**Size:** ~15% of the work.
+### M1 — Skeleton (foundation) ✅ DONE
+Tauri v2 (React 19, Vite 7, zod 4, vitest 4). Models + schemas, atomic-write storage, debounced repository, sidebar/list/detail with full CRUD. Verified: CRUD across areas works, data survives relaunch, and the torn-file guarantee is tested rather than asserted.
+**Size:** ~15% of the work. 33 tests (23 TS, 10 Rust). Binary ~10MB.
+
+Decisions made while building, worth carrying forward:
+
+- **Invariants are enforced only where absence lets a stream rot silently.** `parked ⇒ wakeUpDate` and `waiting ⇒ waitingSince` are schema-enforced, because without them nothing ever resurfaces the stream and §2.4 can't be computed. `active ⇒ nextStep` is deliberately *not* enforced: SPEC §1 says an absent next step is **flagged**, not invalid — it is attention group §2.1. Enforcing it would make the app refuse to load exactly the streams it most needs to shout about.
+- **`withState()` is the only sanctioned way to change state.** A naive `{...s, state: 'parked'}` produces a value the schema rejects, so the transition helper supplies the required fields. It also *preserves* an existing `waitingSince` — resetting that clock on an unrelated edit would silently forgive an overdue wait.
+- **Scratch moved out of `streams/`** into `<root>/.tmp` — see the SPEC §6 correction. Same filesystem (so `rename` stays atomic), invisible to the sync daemon and our watcher.
+- **Invalid files are surfaced in the UI, never dropped.** The repository returns them separately rather than swallowing a parse failure.
+- **Directory watcher deferred.** `notify` is a dependency but unwired: nothing writes to the store except this app until M6 points it at a sync folder. Wire it there, where it has a reason to exist.
+- **`"targets": ["app"]`** — see the DMG risk row.
 
 ### M2 — The brain (parser + attention engine)
 FuzzyDateParser with the SPEC §1 grammar, built test-first; inline interpretation preview in the deadline field. AttentionEngine producing the five grouped trigger lists; Attention view becomes the main screen with row actions (complete step → prompt replacement, log note, snooze, open). Empty state screen.
